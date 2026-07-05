@@ -251,6 +251,8 @@ const fpRows = [
   #geo-precise { margin-top: 16px; }
   #geo-precise-map { width: 100%; height: 260px; border: 1px solid var(--panel-border);
     border-radius: 14px; filter: grayscale(.25) brightness(.72) contrast(1.05); }
+  .geo-addr { margin-top: 10px; font-family: var(--mono); font-size: 13px; color: var(--danger);
+    line-height: 1.5; word-break: break-word; }
 
   /* ---------- Retro ---------- */
   .retro-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 10px; }
@@ -564,6 +566,7 @@ const fpRows = [
 
       <div id="geo-precise" hidden>
         <iframe id="geo-precise-map" title="map" loading="lazy" referrerpolicy="no-referrer"></iframe>
+        <div id="geo-precise-addr" class="geo-addr"></div>
         <div class="geo-cap">
           <span><span class="cs">Přesně tady jsi.</span><span class="en">This is exactly where you are.</span></span>
           <a id="geo-precise-link" href="#" target="_blank" rel="noopener noreferrer">
@@ -708,6 +711,25 @@ const fpRows = [
   function osmEmbed(la, lo, d){ d = d || 0.02; var bbox = (lo-d)+','+(la-d)+','+(lo+d)+','+(la+d);
     return 'https://www.openstreetmap.org/export/embed.html?bbox=' + encodeURIComponent(bbox) + '&layer=mapnik&marker=' + encodeURIComponent(la + ',' + lo); }
   function osmLink(la, lo, z){ z = z || 14; return 'https://www.openstreetmap.org/?mlat=' + la + '&mlon=' + lo + '#map=' + z + '/' + la + '/' + lo; }
+
+  // Reverzní geokódování přes OpenStreetMap Nominatim (zdarma, bez klíče) →
+  // celá adresa z GPS souřadnic. Uloží do S.precise.address a překreslí spis.
+  function reverseGeocode(la, lo){
+    var url = 'https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=18&lat=' + la + '&lon=' + lo;
+    fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
+      .then(function(d){
+        var addr = (d && d.display_name) ? d.display_name : null;
+        if (S.precise) S.precise.address = addr;
+        var el = document.getElementById('geo-precise-addr');
+        if (el) el.textContent = addr || tr('adresu se nepodařilo zjistit', 'address lookup failed');
+        if (S.dossierReady) renderDossier();
+      })
+      .catch(function(){
+        var el = document.getElementById('geo-precise-addr');
+        if (el) el.textContent = tr('adresu se nepodařilo zjistit', 'address lookup failed');
+      });
+  }
 
   // Mapový "reticle" podle IP: reálná (ztlumená) mapa jako podklad + zaměřovač
   // nakreslený přes ni na průhledném canvasu.
@@ -1298,14 +1320,19 @@ const fpRows = [
       if (!navigator.geolocation){ pr.textContent = tr('nedostupné','unavailable'); return; }
       navigator.geolocation.getCurrentPosition(function(p){
         pr.classList.add('danger');
-        var la = p.coords.latitude, lo = p.coords.longitude;
-        pr.textContent = la.toFixed(5) + ', ' + lo.toFixed(5) + '  ±' + Math.round(p.coords.accuracy) + 'm';
+        var la = p.coords.latitude, lo = p.coords.longitude, acc = Math.round(p.coords.accuracy);
+        pr.textContent = la.toFixed(5) + ', ' + lo.toFixed(5) + '  ±' + acc + 'm';
+        S.precise = { lat: la, lon: lo, acc: acc, address: null };
         var box = document.getElementById('geo-precise');
         var f = document.getElementById('geo-precise-map');
         var lnk = document.getElementById('geo-precise-link');
+        var addr = document.getElementById('geo-precise-addr');
         if (f) f.src = osmEmbed(la, lo, 0.004);   // uličková úroveň
         if (lnk) lnk.href = osmLink(la, lo, 17);
+        if (addr) addr.textContent = tr('zjišťuji adresu…', 'looking up address…');
         if (box) box.hidden = false;
+        if (S.dossierReady) renderDossier();   // spis hned na GPS (bez čekání na adresu)
+        reverseGeocode(la, lo);                 // …a doplň celou adresu, až dorazí
       }, function(){ pr.textContent = tr('odmítnuto','denied'); }, { enableHighAccuracy: true, timeout: 10000 });
     });
 
@@ -1418,7 +1445,9 @@ const fpRows = [
   function renderDossier(){
     setText('ds-code', (S.fp && S.fp.id) ? ('#' + S.fp.id) : '#········');
     var loc = '—';
-    if (S.whoami && S.whoami !== false && S.whoami.geo){
+    if (S.precise && (S.precise.address || S.precise.lat != null)){
+      loc = (S.precise.address || (S.precise.lat.toFixed(5) + ', ' + S.precise.lon.toFixed(5))) + '  ·  GPS';
+    } else if (S.whoami && S.whoami !== false && S.whoami.geo){
       var g = S.whoami.geo, cn = g.countryName ? g.countryName[T()] : g.country;
       loc = [g.city, cn].filter(Boolean).join(', ') || '—';
     } else if (S.originBest){ loc = CNAME[S.originBest] ? CNAME[S.originBest][T()] : S.originBest; }
