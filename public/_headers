@@ -1,0 +1,10 @@
+# Cloudflare Pages — HTTP hlavičky pro celý web.
+# Bezpečnostní hlavičky (tematicky sedí k privacy webu). Vědomě NEpřidáváme
+# přísné CSP, protože web stojí na inline skriptech a WebRTC (STUN) — striktní
+# CSP by je rozbila. Necháno jako TODO (nonce/hash refactor).
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(self), camera=(self), microphone=(self), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin

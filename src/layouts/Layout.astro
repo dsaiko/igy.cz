@@ -1,0 +1,157 @@
+---
+// Sdílený chrome igy.cz. Bilingvní mechanika (lang třídy + vlajkový přepínač +
+// inline head skript) je převzatá z www.saiko.cz/ai, jen přebarvená do tmavého
+// "surveillance" ladění. Texty v obou jazycích jsou v HTML vedle sebe
+// (.cs / .en), přepíná se třídou na <html>.
+interface Props {
+  titleCs: string;
+  titleEn: string;
+}
+const { titleCs, titleEn } = Astro.props;
+
+// Cookieless analytika, stejný účet jako saiko (count.js přeskakuje localhost).
+const GOATCOUNTER = '';
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#070809" />
+<meta name="description" content="I Google You — uvidíš, co o tobě tvůj prohlížeč beze slova prozradí. / See what your browser silently reveals about you." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070809'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%2338e8c8' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3.4' fill='%23ff5c6c'/%3E%3C/svg%3E" />
+<!-- Open Graph / Twitter (pro sdílení) -->
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://www.igy.cz/" />
+<meta property="og:title" content="I Google You — vidím tě" />
+<meta property="og:description" content="Uvidíš, co o tobě tvůj prohlížeč beze slova prozradí. / See what your browser silently reveals." />
+<meta name="twitter:card" content="summary_large_image" />
+<script is:inline>
+  /* Nastav jazyk co nejdřív, ať nebliká obojí. ?lang=cs|en → localStorage → en. */
+  (function(){var l='en';try{var q=(location.search.match(/[?&]lang=(cs|en)/)||[])[1];
+   if(q)l=q;else{var s=localStorage.getItem('lang');if(s==='cs'||s==='en')l=s;}}catch(e){}
+   window.__lang=l;document.documentElement.classList.add('lang-'+l);})();
+</script>
+<title>{titleCs}</title>
+<style is:global>
+  :root {
+    --bg: #070809;
+    --bg-soft: #0d0f12;
+    --panel: rgba(255,255,255,0.022);
+    --panel-border: rgba(255,255,255,0.08);
+    --ink: #e8edf2;
+    --ink-dim: #8b95a3;
+    --ink-faint: #4a5360;
+    --accent: #38e8c8;      /* surveillance teal */
+    --accent-dim: #1c8f7c;
+    --danger: #ff5c6c;      /* "scary" warning red */
+    --amber: #ffb84d;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--ink); background: var(--bg);
+    font-family: var(--sans); -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility; overflow-x: hidden;
+  }
+
+  /* Jemné pozadí: radiální záře + tenká mřížka + scanline overlay. */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+    background:
+      radial-gradient(900px 600px at 50% -10%, rgba(56,232,200,0.10), transparent 60%),
+      radial-gradient(700px 500px at 100% 100%, rgba(255,92,108,0.07), transparent 55%),
+      linear-gradient(180deg, #070809 0%, #06070a 100%);
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .5;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 46px 46px;
+    -webkit-mask-image: radial-gradient(circle at 50% 30%, #000 0%, transparent 75%);
+            mask-image: radial-gradient(circle at 50% 30%, #000 0%, transparent 75%);
+  }
+
+  /* Bilingvní přepínání */
+  .lang-cs .en, .lang-en .cs { display: none; }
+
+  .langpill {
+    position: fixed; top: 16px; right: 16px; z-index: 50; display: flex; gap: 4px;
+    background: rgba(13,15,18,0.7); border: 1px solid var(--panel-border);
+    border-radius: 999px; padding: 4px; backdrop-filter: blur(10px);
+  }
+  .langpill button {
+    display: flex; align-items: center; justify-content: center; width: 34px; height: 25px;
+    border: none; background: none; border-radius: 999px; cursor: pointer; padding: 0;
+    opacity: .4; transition: opacity .15s, background .15s;
+  }
+  .langpill button:hover { opacity: .8; background: rgba(255,255,255,0.06); }
+  .langpill button.on { opacity: 1; background: rgba(56,232,200,0.16); }
+  .langpill svg { display: block; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,0.4); }
+
+  ::selection { background: rgba(56,232,200,0.28); color: #fff; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+</style>
+<slot name="head" />
+</head>
+<body>
+  <div class="langpill" role="group" aria-label="Language / Jazyk">
+    <button data-lang="cs" title="Čeština" aria-label="Čeština">
+      <svg width="22" height="15" viewBox="0 0 6 4" xmlns="http://www.w3.org/2000/svg">
+        <rect width="6" height="2" fill="#fff"/><rect width="6" height="2" y="2" fill="#d7141a"/>
+        <path d="M0,0 L3,2 L0,4 Z" fill="#11457e"/>
+      </svg>
+    </button>
+    <button data-lang="en" title="English" aria-label="English">
+      <svg width="22" height="15" viewBox="0 0 60 30" xmlns="http://www.w3.org/2000/svg">
+        <clipPath id="gbA"><rect width="60" height="30"/></clipPath>
+        <clipPath id="gbB"><path d="M30,15 h30 v15 z v15 h-30 z h-30 v-15 z v-15 h30 z"/></clipPath>
+        <g clip-path="url(#gbA)">
+          <rect width="60" height="30" fill="#012169"/>
+          <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"/>
+          <path d="M0,0 L60,30 M60,0 L0,30" clip-path="url(#gbB)" stroke="#C8102E" stroke-width="4"/>
+          <path d="M30,0 v30 M0,15 h60" stroke="#fff" stroke-width="10"/>
+          <path d="M30,0 v30 M0,15 h60" stroke="#C8102E" stroke-width="6"/>
+        </g>
+      </svg>
+    </button>
+  </div>
+
+  <slot />
+
+  <script is:inline define:vars={{ titleCs, titleEn }}>
+    (function(){
+      var TITLES = { cs: titleCs, en: titleEn };
+      function apply(l){
+        document.documentElement.classList.remove('lang-cs','lang-en');
+        document.documentElement.classList.add('lang-'+l);
+        document.documentElement.lang = l;
+        if (TITLES[l]) document.title = TITLES[l];
+        document.querySelectorAll('.langpill button').forEach(function(b){
+          b.classList.toggle('on', b.dataset.lang === l);
+        });
+        try { localStorage.setItem('lang', l); } catch(e){}
+        window.__lang = l;
+        if (typeof window.onLangChange === 'function') window.onLangChange(l);
+      }
+      window.setLang = apply;
+      document.querySelectorAll('.langpill button').forEach(function(b){
+        b.addEventListener('click', function(){ apply(b.dataset.lang); });
+      });
+      apply(window.__lang || 'en');
+    })();
+  </script>
+
+  {GOATCOUNTER && (
+    <script is:inline async src="//gc.zgo.at/count.js" data-goatcounter={GOATCOUNTER}></script>
+  )}
+</body>
+</html>

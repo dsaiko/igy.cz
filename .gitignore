@@ -1,0 +1,24 @@
+# Závislosti a build
+node_modules/
+dist/
+.astro/
+
+# Lokální konfigurace deployi (obsahuje Cloudflare account ID)
+Makefile.local
+
+# Poznámky/kontext projektu — necommitovat (obsahuje interní údaje)
+memory/
+
+# Cloudflare / wrangler lokální stav a tajemství
+.wrangler/
+.dev.vars
+.env
+.env.*
+
+# Logy a smetí
+*.log
+npm-debug.log*
+.DS_Store
+
+# Dočasné soubory
+_*.mjs

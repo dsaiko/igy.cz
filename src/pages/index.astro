@@ -1,0 +1,1486 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+// "I Google You" — jedna dlouhá scrollovací stránka. Hero udělá dramatický
+// "scan", pak se při scrollu odhalují panely "dossieru": síť, zařízení,
+// prohlížeč, otisk (fingerprint) a volitelná svolení. Nic se neukládá ani
+// neodesílá — vše počítá prohlížeč u tebe, serverová data jen čte /api/whoami.
+
+// Helper: jeden řádek "klíč → hodnota" s místem (id), které doplní JS.
+const Row = (id: string, kCs: string, kEn: string) => ({ id, kCs, kEn });
+
+const netRows = [
+  Row('ip', 'IP adresa', 'IP address'),
+  Row('ipver', 'Verze IP', 'IP version'),
+  Row('city', 'Město', 'City'),
+  Row('region', 'Region', 'Region'),
+  Row('country', 'Země', 'Country'),
+  Row('isp', 'Operátor / ASN', 'ISP / ASN'),
+  Row('colo', 'Prošel jsi přes', 'You routed via'),
+  Row('proto', 'Protokol', 'Protocol'),
+  Row('tls', 'TLS', 'TLS'),
+  Row('rtt', 'Latence k uzlu', 'Latency to node'),
+  Row('rtc-local', 'Lokální IP (WebRTC)', 'Local IP (WebRTC)'),
+  Row('rtc-public', 'Veřejná IP (STUN)', 'Public IP (STUN)'),
+];
+// Signály pro triangulaci původu (panel 05). Texty řádků doplní JS.
+const originRows = [
+  Row('o-ip', 'Podle IP', 'By IP'),
+  Row('o-tz', 'Časové pásmo', 'Time zone'),
+  Row('o-lang', 'Jazyk prohlížeče', 'Browser language'),
+  Row('o-locale', 'Formát čísel', 'Number format'),
+  Row('o-adblock', 'Adblock', 'Adblock'),
+  Row('o-adregion', 'Regionální filtr', 'Regional filter'),
+];
+const behaviorRows = [
+  Row('b-time', 'Čas na stránce', 'Time on page'),
+  Row('b-mouse', 'Pohyby myši', 'Mouse moves'),
+  Row('b-dist', 'Ujetá vzdálenost', 'Distance travelled'),
+  Row('b-clicks', 'Kliknutí', 'Clicks'),
+  Row('b-keys', 'Stisky kláves', 'Keystrokes'),
+  Row('b-scroll', 'Nejhlouběji', 'Scrolled to'),
+  Row('b-away', 'Kolikrát ses koukl jinam', 'Times you looked away'),
+];
+const deviceRows = [
+  Row('os', 'Systém', 'OS'),
+  Row('platform', 'Platforma', 'Platform'),
+  Row('cores', 'Jádra CPU', 'CPU cores'),
+  Row('ram', 'Paměť (min.)', 'Memory (min.)'),
+  Row('touch', 'Dotykové body', 'Touch points'),
+  Row('screen', 'Obrazovka', 'Screen'),
+  Row('viewport', 'Okno', 'Viewport'),
+  Row('dpr', 'Pixel ratio', 'Pixel ratio'),
+  Row('depth', 'Barevná hloubka', 'Color depth'),
+  Row('gpu', 'Grafika (GPU)', 'Graphics (GPU)'),
+  Row('device-guess', 'Odhad zařízení', 'Best-guess device'),
+  Row('media-cam', 'Připojené kamery', 'Cameras attached'),
+  Row('media-mic', 'Připojené mikrofony', 'Mics attached'),
+];
+const browserRows = [
+  Row('browser', 'Prohlížeč', 'Browser'),
+  Row('engine', 'Jádro', 'Engine'),
+  Row('langs', 'Jazyky', 'Languages'),
+  Row('tz', 'Časové pásmo', 'Time zone'),
+  Row('localtime', 'Tvůj čas', 'Your time'),
+  Row('locale', 'Formát čísel', 'Number format'),
+  Row('dnt', 'Do Not Track', 'Do Not Track'),
+  Row('cookies', 'Cookies', 'Cookies'),
+  Row('ua', 'User-Agent', 'User-Agent'),
+];
+const fpRows = [
+  Row('fp-canvas', 'Canvas otisk', 'Canvas hash'),
+  Row('fp-webgl', 'WebGL otisk', 'WebGL hash'),
+  Row('fp-audio', 'Audio otisk', 'Audio hash'),
+  Row('fp-fonts', 'Detekované fonty', 'Detected fonts'),
+  Row('fp-software', 'Software podle fontů', 'Software from fonts'),
+];
+---
+<Layout
+  titleCs="I Google You — vidím tě"
+  titleEn="I Google You — I can see you">
+
+<style is:global>
+  /* ---------- Layout sekcí ---------- */
+  main { width: 100%; }
+  .wrap { width: min(880px, 92vw); margin: 0 auto; }
+
+  /* ---------- HERO ---------- */
+  .hero {
+    min-height: 100svh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    padding: 80px 20px 40px; position: relative;
+  }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .32em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 26px;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .eyebrow .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 10px var(--accent); animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.7)} }
+
+  .hero h1 {
+    font-size: clamp(40px, 9vw, 92px); line-height: .98; font-weight: 800;
+    letter-spacing: -0.035em; margin: 0; max-width: 14ch;
+    background: linear-gradient(180deg, #fff 30%, #9fb0bd 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero h1 .hl { color: var(--danger); -webkit-text-fill-color: var(--danger); }
+
+  .scanline {
+    font-family: var(--mono); font-size: clamp(14px, 2.4vw, 19px); color: var(--ink-dim);
+    margin: 30px 0 0; min-height: 1.6em;
+  }
+  .scanline b { color: var(--accent); font-weight: 600; }
+  .scanline .cursor {
+    display: inline-block; width: .6ch; background: var(--accent); margin-left: 1px;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .scrollcue {
+    position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 12px; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--accent); display: flex; flex-direction: column; align-items: center; gap: 12px;
+    opacity: 0; transition: opacity .6s; animation: floaty 1.8s ease-in-out infinite;
+    text-shadow: 0 0 18px rgba(56,232,200,0.5);
+  }
+  .scrollcue.show { opacity: 1; }
+  .scrollcue .arrow {
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 50%; font-size: 18px;
+    border: 1px solid var(--accent); color: var(--accent);
+    box-shadow: 0 0 20px rgba(56,232,200,0.35); background: rgba(56,232,200,0.06);
+  }
+  @keyframes floaty { 0%,100%{transform:translate(-50%,0)} 50%{transform:translate(-50%,8px)} }
+
+  /* ---------- PANELY (dossier) ---------- */
+  .panel { padding: 60px 0; }
+  .panel-card {
+    border: 1px solid var(--panel-border); border-radius: 18px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.008));
+    overflow: hidden; position: relative;
+    opacity: 0; transform: translateY(34px); filter: blur(6px);
+    transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1), filter .7s;
+  }
+  .panel-card.in { opacity: 1; transform: none; filter: none; }
+  .panel-card::before { /* horní accent linka */
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-dim), transparent);
+  }
+
+  .panel-head {
+    display: flex; align-items: center; gap: 14px; padding: 20px 24px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  .panel-num {
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+    border: 1px solid var(--accent-dim); border-radius: 6px; padding: 3px 7px;
+  }
+  .panel-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+  .panel-sub { font-size: 13px; color: var(--ink-dim); margin-left: auto; text-align: right; }
+
+  .rows { display: grid; grid-template-columns: 1fr; }
+  .row {
+    display: grid; grid-template-columns: minmax(120px, 38%) 1fr; gap: 16px;
+    padding: 13px 24px; border-bottom: 1px solid rgba(255,255,255,0.045);
+    font-size: 14px; align-items: baseline;
+  }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: var(--ink-dim); }
+  .row .v {
+    font-family: var(--mono); color: var(--ink); word-break: break-word;
+    opacity: 0; transform: translateY(4px); transition: opacity .4s, transform .4s;
+  }
+  .panel-card.in .row .v { opacity: 1; transform: none; }
+  .row .v.pending { color: var(--ink-faint); }
+  .row .v.hot { color: var(--amber); }
+  .row .v.danger { color: var(--danger); }
+  .row .v small { color: var(--ink-faint); font-size: 12px; }
+
+  /* Intro každého panelu */
+  .lead { font-size: 15px; line-height: 1.65; color: var(--ink-dim); margin: 0 0 26px; }
+  .lead b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Fingerprint verdikt ---------- */
+  .fp-verdict {
+    margin-top: 18px; padding: 24px; border-radius: 16px;
+    border: 1px solid rgba(255,92,108,0.3); background: rgba(255,92,108,0.06);
+    text-align: center;
+  }
+  .fp-id {
+    font-family: var(--mono); font-size: clamp(20px, 5vw, 34px); font-weight: 700;
+    color: var(--danger); letter-spacing: .04em; word-break: break-all;
+  }
+  .fp-verdict p { color: var(--ink-dim); font-size: 14px; margin: 14px 0 0; line-height: 1.6; }
+  .incognito {
+    display: inline-flex; align-items: center; gap: 10px; margin: 18px auto 0;
+    padding: 11px 20px; border-radius: 999px;
+    border: 1px solid rgba(56,232,200,0.4); background: rgba(56,232,200,0.08);
+    font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--accent);
+    box-shadow: 0 0 26px rgba(56,232,200,0.12);
+  }
+  .incognito .ic { font-size: 17px; filter: grayscale(1) brightness(1.6); }
+  .incognito-try { color: var(--ink-faint) !important; font-size: 12.5px !important; margin-top: 12px !important; }
+  .sc-box {
+    margin-top: 14px; padding: 22px; border-radius: 16px; text-align: center;
+    border: 1px solid rgba(255,184,77,0.3); background: rgba(255,184,77,0.06);
+  }
+  .sc-tag { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; color: var(--amber); margin-bottom: 12px; }
+  .sc-box .fp-id { color: var(--amber); font-size: clamp(18px, 4.5vw, 28px); }
+  .sc-box .fp-id.danger { color: var(--danger); }
+  .sc-box p { color: var(--ink-dim); font-size: 14px; margin: 12px 0 0; line-height: 1.6; }
+  .sc-box p b { color: var(--ink); }
+  .fp-bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; margin: 0 0 18px; }
+  .fp-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--danger)); transition: width .5s ease; }
+
+  /* ---------- Volitelná svolení ---------- */
+  .perm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap: 12px; }
+  .perm {
+    text-align: left; border: 1px solid var(--panel-border); border-radius: 14px;
+    background: rgba(255,255,255,0.02); padding: 16px; cursor: pointer; color: var(--ink);
+    font-family: inherit; transition: border-color .15s, background .15s, transform .05s;
+  }
+  .perm:hover { border-color: var(--accent-dim); background: rgba(56,232,200,0.05); }
+  .perm:active { transform: scale(.98); }
+  .perm .pi { font-size: 22px; }
+  .perm .pt { font-weight: 700; font-size: 14px; margin: 8px 0 4px; }
+  .perm .pd { font-size: 12.5px; color: var(--ink-dim); line-height: 1.5; }
+  .perm .pr { font-family: var(--mono); font-size: 12.5px; color: var(--accent); margin-top: 10px; min-height: 1.2em; word-break: break-word; }
+  .perm .pr.danger { color: var(--danger); }
+
+  /* ---------- Geo reticle (mapa podle IP) ---------- */
+  .geo-wrap { padding: 8px 24px 22px; }
+  .geo-stack { position: relative; border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--panel-border); background: #05070a; aspect-ratio: 760 / 240; }
+  #geo-map-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
+    pointer-events: none; filter: grayscale(.35) brightness(.62) contrast(1.05); }
+  .geo-tint { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, rgba(56,232,200,0.12), transparent 55%),
+      linear-gradient(180deg, rgba(5,7,10,0.35), rgba(5,7,10,0.55)); }
+  #geo-map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+  .geo-cap { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    margin-top: 10px; font-family: var(--mono); font-size: 12.5px; color: var(--ink-dim); }
+  .geo-cap a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-dim); white-space: nowrap; }
+  .geo-cap a:hover { color: #fff; }
+
+  /* ---------- Přesná GPS mapa (panel Svolení) ---------- */
+  #geo-precise { margin-top: 16px; }
+  #geo-precise-map { width: 100%; height: 260px; border: 1px solid var(--panel-border);
+    border-radius: 14px; filter: grayscale(.25) brightness(.72) contrast(1.05); }
+
+  /* ---------- Retro ---------- */
+  .retro-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 10px; }
+  .retro {
+    border: 1px solid var(--panel-border); border-radius: 12px; padding: 14px;
+    background: rgba(255,255,255,0.015);
+  }
+  .retro .rn { font-weight: 700; font-size: 14px; }
+  .retro .rs { font-family: var(--mono); font-size: 11px; color: var(--danger); text-transform: uppercase; letter-spacing: .08em; }
+  .retro .rd { font-size: 12.5px; color: var(--ink-dim); margin-top: 6px; line-height: 1.5; }
+
+  /* ---------- Outro ---------- */
+  .outro { text-align: center; padding: 90px 20px 70px; }
+  .outro h2 { font-size: clamp(26px, 5vw, 40px); font-weight: 800; letter-spacing: -0.02em; margin: 0 0 18px; }
+  .outro p { color: var(--ink-dim); font-size: 15px; line-height: 1.7; max-width: 60ch; margin: 0 auto 14px; }
+  .privacy {
+    display: inline-flex; align-items: center; gap: 9px; margin-top: 14px; padding: 10px 18px;
+    border: 1px solid var(--accent-dim); border-radius: 999px; color: var(--accent);
+    font-family: var(--mono); font-size: 13px;
+  }
+  .footer-link { margin-top: 34px; display: flex; gap: 22px; justify-content: center; }
+  .footer-link a { color: var(--ink-dim); text-decoration: none; font-size: 13px; border-bottom: 1px solid var(--ink-faint); }
+  .footer-link a:hover { color: var(--accent); border-color: var(--accent); }
+
+  .section-label {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .26em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 16px; display: block;
+  }
+
+  /* ---------- Finální spis (dossier) ---------- */
+  .dossier {
+    width: min(680px, 100%); margin: 30px auto 10px; text-align: left;
+    border: 1px solid rgba(255,92,108,0.28); border-radius: 16px; overflow: hidden;
+    background: linear-gradient(180deg, rgba(255,92,108,0.05), rgba(255,255,255,0.008));
+    opacity: 0; transform: translateY(28px) scale(.99); filter: blur(6px);
+    transition: opacity .8s ease, transform .8s cubic-bezier(.2,.7,.2,1), filter .8s;
+  }
+  .dossier.in { opacity: 1; transform: none; filter: none; }
+  .dossier-head {
+    display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+    border-bottom: 1px solid rgba(255,92,108,0.2); font-family: var(--mono); font-size: 12px;
+    letter-spacing: .14em; color: var(--ink-dim);
+  }
+  .ds-rec { color: var(--danger); font-weight: 700; animation: pulse 1.6s ease-in-out infinite; }
+  .ds-title { color: var(--ink); }
+  .ds-code { margin-left: auto; color: var(--danger); }
+  .dossier-grid { padding: 6px 20px; }
+  .ds-row { display: grid; grid-template-columns: 40% 1fr; gap: 12px; padding: 11px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.045); font-size: 14px; align-items: baseline; }
+  .ds-row:last-child { border-bottom: none; }
+  .ds-k { color: var(--ink-dim); font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; }
+  .ds-v { font-family: var(--mono); color: var(--ink); word-break: break-word; }
+  .ds-track { padding: 20px; text-align: center; border-top: 1px solid rgba(255,92,108,0.2);
+    background: rgba(255,92,108,0.06); }
+  .ds-track-label { font-family: var(--mono); font-size: 11px; letter-spacing: .22em; color: var(--ink-dim); }
+  .ds-track-val { font-family: var(--mono); font-size: clamp(22px, 5vw, 34px); font-weight: 800;
+    color: var(--danger); margin: 8px 0 6px; }
+  .ds-track-note { color: var(--ink-dim); font-size: 13px; line-height: 1.55; max-width: 52ch; margin: 0 auto; }
+</style>
+
+<main>
+  <noscript>
+    <div style="max-width:680px;margin:80px auto;padding:0 20px;text-align:center;font-family:var(--sans);">
+      <p style="font-size:20px;color:var(--ink);font-weight:700;">
+        <span class="cs">igy.cz běží na JavaScriptu.</span>
+        <span class="en">igy.cz runs on JavaScript.</span>
+      </p>
+      <p style="color:var(--ink-dim);line-height:1.6;">
+        <span class="cs">Máš ho vypnutý — a to je paradoxně nejlepší obrana proti tomu, co tenhle web ukazuje. Zapni ho, jestli chceš vidět, co o tobě prohlížeč prozradí.</span>
+        <span class="en">You've turned it off — which is ironically the best defense against what this site demonstrates. Enable it to see what your browser reveals about you.</span>
+      </p>
+    </div>
+  </noscript>
+
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <span class="eyebrow"><span class="dot"></span> igy.cz · I Google You</span>
+    <h1>
+      <span class="cs">Myslíš, že jsi tu <span class="hl">anonymně?</span></span>
+      <span class="en">Think you're here <span class="hl">anonymously?</span></span>
+    </h1>
+    <p class="scanline" id="scanline"><span class="cursor">&nbsp;</span></p>
+    <div class="scrollcue" id="scrollcue">
+      <span class="cs">scrolluj — uvidíš, co o tobě vím</span>
+      <span class="en">scroll — see what I know about you</span>
+      <span class="arrow">↓</span>
+    </div>
+  </section>
+
+  <!-- ============ 01 · SÍŤ ============ -->
+  <section class="panel"><div class="wrap"><div class="panel-card" data-panel>
+    <div class="panel-head">
+      <span class="panel-num">01</span>
+      <h2 class="panel-title"><span class="cs">Síť</span><span class="en">Network</span></h2>
+      <span class="panel-sub"><span class="cs">co vidí server</span><span class="en">what the server sees</span></span>
+    </div>
+    <div class="rows">
+      {netRows.map((r) => (
+        <div class="row">
+          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
+          <span class="v pending" id={`v-${r.id}`}>…</span>
+        </div>
+      ))}
+    </div>
+    <div class="geo-wrap" id="geo-wrap" hidden>
+      <div class="geo-stack">
+        <iframe id="geo-map-frame" title="map" loading="lazy" referrerpolicy="no-referrer"></iframe>
+        <div class="geo-tint"></div>
+        <canvas id="geo-map" width="760" height="240"></canvas>
+      </div>
+      <div class="geo-cap">
+        <span id="geo-cap-txt"></span>
+        <a id="geo-osm" href="#" target="_blank" rel="noopener noreferrer">
+          <span class="cs">otevřít v mapě →</span><span class="en">open in map →</span>
+        </a>
+      </div>
+    </div>
+  </div></div></section>
+
+  <!-- ============ 02 · ZAŘÍZENÍ ============ -->
+  <section class="panel"><div class="wrap"><div class="panel-card" data-panel>
+    <div class="panel-head">
+      <span class="panel-num">02</span>
+      <h2 class="panel-title"><span class="cs">Zařízení</span><span class="en">Device</span></h2>
+      <span class="panel-sub"><span class="cs">tvůj hardware</span><span class="en">your hardware</span></span>
+    </div>
+    <div class="rows">
+      {deviceRows.map((r) => (
+        <div class="row">
+          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
+          <span class="v pending" id={`v-${r.id}`}>…</span>
+        </div>
+      ))}
+    </div>
+  </div></div></section>
+
+  <!-- ============ 03 · PROHLÍŽEČ ============ -->
+  <section class="panel"><div class="wrap"><div class="panel-card" data-panel>
+    <div class="panel-head">
+      <span class="panel-num">03</span>
+      <h2 class="panel-title"><span class="cs">Prohlížeč</span><span class="en">Browser</span></h2>
+      <span class="panel-sub"><span class="cs">software a nastavení</span><span class="en">software & settings</span></span>
+    </div>
+    <div class="rows">
+      {browserRows.map((r) => (
+        <div class="row">
+          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
+          <span class="v pending" id={`v-${r.id}`}>…</span>
+        </div>
+      ))}
+    </div>
+  </div></div></section>
+
+  <!-- ============ 04 · OTISK ============ -->
+  <section class="panel"><div class="wrap"><div class="panel-card" data-panel>
+    <div class="panel-head">
+      <span class="panel-num">04</span>
+      <h2 class="panel-title"><span class="cs">Otisk</span><span class="en">Fingerprint</span></h2>
+      <span class="panel-sub"><span class="cs">tiché stopy</span><span class="en">silent traces</span></span>
+    </div>
+    <div style="padding: 20px 24px 4px;">
+      <p class="lead" style="margin-bottom:18px;">
+        <span class="cs">Tohle nepotřebuje cookies ani přihlášení. Tvůj prohlížeč kreslí grafiku
+        a přehrává zvuk nepatrně jinak než kterýkoli jiný — z těch rozdílů jde složit
+        <b>skoro unikátní otisk</b>, který tě pozná i v anonymním okně.</span>
+        <span class="en">No cookies, no login. Your browser draws graphics and plays audio
+        slightly differently from every other one — those differences combine into an
+        <b>almost-unique fingerprint</b> that recognizes you even in incognito.</span>
+      </p>
+    </div>
+    <div class="rows">
+      {fpRows.map((r) => (
+        <div class="row">
+          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
+          <span class="v pending" id={`v-${r.id}`}>…</span>
+        </div>
+      ))}
+    </div>
+    <div style="padding: 20px 24px 24px;">
+      <div class="fp-bar"><i id="fp-progress"></i></div>
+      <div class="fp-verdict">
+        <div class="fp-id" id="fp-id">· · · · · · · ·</div>
+        <p>
+          <span class="cs">Tohle je tvoje ID — složené jen z vlastností tvého prohlížeče a zařízení.</span>
+          <span class="en">This is your ID — built only from your browser and device traits.</span>
+        </p>
+        <div class="incognito">
+          <span class="ic">🕶️</span>
+          <span class="cs">Nezmění se ani v anonymním okně.</span>
+          <span class="en">It won't change in incognito either.</span>
+        </div>
+        <p class="incognito-try">
+          <span class="cs">Nevěříš? Otevři igy.cz v anonymním okně a porovnej ID.</span>
+          <span class="en">Don't believe it? Open igy.cz in incognito and compare the ID.</span>
+        </p>
+      </div>
+
+      <div class="sc-box" id="sc-box">
+        <div class="sc-tag">
+          <span class="cs">🍪 SUPERCOOKIE · ETag — přežije smazání cookies</span>
+          <span class="en">🍪 SUPERCOOKIE · ETag — survives a cookie wipe</span>
+        </div>
+        <div class="fp-id" id="sc-id">· · ·</div>
+        <p id="sc-note">
+          <span class="cs">Ptám se serveru…</span>
+          <span class="en">Asking the server…</span>
+        </p>
+      </div>
+    </div>
+  </div></div></section>
+
+  <!-- ============ 05 · PŮVOD ============ -->
+  <section class="panel"><div class="wrap"><div class="panel-card" data-panel>
+    <div class="panel-head">
+      <span class="panel-num">05</span>
+      <h2 class="panel-title"><span class="cs">Odkud doopravdy jsi</span><span class="en">Where you really are</span></h2>
+      <span class="panel-sub"><span class="cs">křížím signály</span><span class="en">cross-checking signals</span></span>
+    </div>
+    <div style="padding: 20px 24px 4px;">
+      <p class="lead" style="margin-bottom:18px;">
+        <span class="cs">Jeden údaj se dá zamlžit. Ale když jich složím víc dohromady,
+        zbude málo místa pro pochybnost — <b>každý řádek hlasuje pro jednu zemi</b>.</span>
+        <span class="en">A single data point can be faked. But stack several together and
+        there's little room for doubt — <b>each row votes for one country</b>.</span>
+      </p>
+    </div>
+    <div class="rows">
+      {originRows.map((r) => (
+        <div class="row">
+          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
+          <span class="v pending" id={`v-${r.id}`}>…</span>
+        </div>
+      ))}
+    </div>
+    <div style="padding: 20px 24px 24px;">
+      <div class="fp-verdict" style="border-color: rgba(56,232,200,0.3); background: rgba(56,232,200,0.06);">
+        <div class="fp-id" id="origin-verdict" style="color: var(--accent);">· · ·</div>
+        <p id="origin-note">
+          <span class="cs">Triangulace běží…</span>
+          <span class="en">Triangulating…</span>
+        </p>
+      </div>
+    </div>
+  </div></div></section>
+
+  <!-- ============ 06 · CHOVÁNÍ ============ -->
+  <section class="panel"><div class="wrap"><div class="panel-card" data-panel>
+    <div class="panel-head">
+      <span class="panel-num">06</span>
+      <h2 class="panel-title"><span class="cs">Sleduju tě. Právě teď.</span><span class="en">I'm watching you. Right now.</span></h2>
+      <span class="panel-sub"><span class="cs">v reálném čase</span><span class="en">in real time</span></span>
+    </div>
+    <div style="padding: 20px 24px 4px;">
+      <p class="lead" style="margin-bottom:18px;">
+        <span class="cs">Tohle běží od chvíle, kdy jsi web otevřel — bez ptaní. Každý pohyb,
+        každé kliknutí, i to, <b>kdy ses přepnul do jiného okna</b>.</span>
+        <span class="en">This has run since you opened the page — no asking. Every move,
+        every click, even <b>when you switched to another window</b>.</span>
+      </p>
+    </div>
+    <div class="rows">
+      {behaviorRows.map((r) => (
+        <div class="row">
+          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
+          <span class="v pending" id={`v-${r.id}`}>…</span>
+        </div>
+      ))}
+    </div>
+  </div></div></section>
+
+  <!-- ============ 07 · SVOLENÍ ============ -->
+  <section class="panel"><div class="wrap"><div class="panel-card" data-panel>
+    <div class="panel-head">
+      <span class="panel-num">07</span>
+      <h2 class="panel-title"><span class="cs">A když dovolíš…</span><span class="en">And if you allow…</span></h2>
+      <span class="panel-sub"><span class="cs">jediné kliknutí</span><span class="en">one click each</span></span>
+    </div>
+    <div style="padding: 22px 24px;">
+      <p class="lead">
+        <span class="cs">Všechno nahoře šlo <b>bez tvého svolení</b>. Tohle je za jedním kliknutím —
+        zkus, jak málo stačí.</span>
+        <span class="en">Everything above worked <b>without your consent</b>. These are one click away —
+        see how little it takes.</span>
+      </p>
+      <div class="perm-grid">
+        <button class="perm" id="perm-geo">
+          <div class="pi">📍</div>
+          <div class="pt"><span class="cs">Přesná poloha</span><span class="en">Precise location</span></div>
+          <div class="pd"><span class="cs">GPS na metry, ne podle IP</span><span class="en">GPS to the metre, not by IP</span></div>
+          <div class="pr" id="pr-geo"></div>
+        </button>
+        <button class="perm" id="perm-cam">
+          <div class="pi">📷</div>
+          <div class="pt"><span class="cs">Kamera</span><span class="en">Camera</span></div>
+          <div class="pd"><span class="cs">Kolik kamer máš a co vidí</span><span class="en">How many cameras, and the view</span></div>
+          <div class="pr" id="pr-cam"></div>
+        </button>
+        <button class="perm" id="perm-mic">
+          <div class="pi">🎙️</div>
+          <div class="pt"><span class="cs">Mikrofon</span><span class="en">Microphone</span></div>
+          <div class="pd"><span class="cs">Hladina zvuku v reálném čase</span><span class="en">Live audio level</span></div>
+          <div class="pr" id="pr-mic"></div>
+        </button>
+        <button class="perm" id="perm-battery">
+          <div class="pi">🔋</div>
+          <div class="pt"><span class="cs">Baterie</span><span class="en">Battery</span></div>
+          <div class="pd"><span class="cs">Stav nabití i bez svolení</span><span class="en">Charge level, no prompt</span></div>
+          <div class="pr" id="pr-battery"></div>
+        </button>
+      </div>
+
+      <div id="geo-precise" hidden>
+        <iframe id="geo-precise-map" title="map" loading="lazy" referrerpolicy="no-referrer"></iframe>
+        <div class="geo-cap">
+          <span><span class="cs">Přesně tady jsi.</span><span class="en">This is exactly where you are.</span></span>
+          <a id="geo-precise-link" href="#" target="_blank" rel="noopener noreferrer">
+            <span class="cs">otevřít v mapách →</span><span class="en">open in maps →</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div></div></section>
+
+  <!-- ============ 08 · RETRO ============ -->
+  <section class="panel"><div class="wrap"><div class="panel-card" data-panel>
+    <div class="panel-head">
+      <span class="panel-num">08</span>
+      <h2 class="panel-title"><span class="cs">Kdysi to bylo horší</span><span class="en">It used to be worse</span></h2>
+      <span class="panel-sub"><span class="cs">co weby viděly dřív</span><span class="en">what sites saw before</span></span>
+    </div>
+    <div style="padding: 22px 24px;">
+      <p class="lead">
+        <span class="cs">Dnes prohlížeč hodně schovává. Ještě před pár lety měly weby
+        přes pluginy přístup hluboko do systému:</span>
+        <span class="en">Browsers hide a lot today. A few years ago, plugins gave sites
+        deep access into your system:</span>
+      </p>
+      <div class="retro-grid">
+        <div class="retro"><div class="rn">Flash</div><div class="rs">† 2020</div><div class="rd"><span class="cs">„Super-cookies", systémové info, mikrofon.</span><span class="en">"Super-cookies", system info, microphone.</span></div></div>
+        <div class="retro"><div class="rn">ActiveX</div><div class="rs">† IE only</div><div class="rd"><span class="cs">Plný přístup k Windows. Noční můra.</span><span class="en">Full Windows access. A nightmare.</span></div></div>
+        <div class="retro"><div class="rn">Java applety</div><div class="rs">† dead</div><div class="rd"><span class="cs">Běh kódu mimo sandbox prohlížeče.</span><span class="en">Code running outside the browser sandbox.</span></div></div>
+        <div class="retro"><div class="rn">Silverlight</div><div class="rs">† 2021</div><div class="rd"><span class="cs">Vlastní runtime, DRM, info o stroji.</span><span class="en">Own runtime, DRM, machine info.</span></div></div>
+      </div>
+    </div>
+  </div></div></section>
+
+  <!-- ============ FINÁLE · SPIS ============ -->
+  <section class="outro">
+    <span class="section-label"><span class="cs">tvůj spis</span><span class="en">your file</span></span>
+    <h2>
+      <span class="cs">Tohle všechno. Bez jediného kliknutí.</span>
+      <span class="en">All of this. Without a single click.</span>
+    </h2>
+
+    <div class="dossier" data-panel>
+      <div class="dossier-head">
+        <span class="ds-rec">● REC</span>
+        <span class="ds-title"><span class="cs">SLOŽKA SUBJEKTU</span><span class="en">SUBJECT FILE</span></span>
+        <span class="ds-code" id="ds-code">#········</span>
+      </div>
+      <div class="dossier-grid">
+        <div class="ds-row"><span class="ds-k"><span class="cs">Poloha</span><span class="en">Location</span></span><span class="ds-v" id="ds-loc">…</span></div>
+        <div class="ds-row"><span class="ds-k"><span class="cs">IP</span><span class="en">IP</span></span><span class="ds-v" id="ds-ip">…</span></div>
+        <div class="ds-row"><span class="ds-k"><span class="cs">Zařízení</span><span class="en">Device</span></span><span class="ds-v" id="ds-device">…</span></div>
+        <div class="ds-row"><span class="ds-k"><span class="cs">Prohlížeč</span><span class="en">Browser</span></span><span class="ds-v" id="ds-browser">…</span></div>
+        <div class="ds-row"><span class="ds-k"><span class="cs">Otisk</span><span class="en">Fingerprint</span></span><span class="ds-v" id="ds-fp">…</span></div>
+        <div class="ds-row"><span class="ds-k"><span class="cs">Uložené sledování</span><span class="en">Persistent tag</span></span><span class="ds-v" id="ds-super">…</span></div>
+      </div>
+      <div class="ds-track">
+        <div class="ds-track-label"><span class="cs">SLEDOVATELNOST</span><span class="en">TRACKABILITY</span></div>
+        <div class="ds-track-val" id="ds-track">…</div>
+        <div class="ds-track-note" id="ds-track-note"></div>
+      </div>
+    </div>
+
+    <p>
+      <span class="cs">Každý web, na který přijdeš, vidí přesně tohle — a obvykle to spojí
+      s tvým otiskem napříč návštěvami. Není to chyba. Tak je web postavený.</span>
+      <span class="en">Every site you visit sees exactly this — and usually ties it to your
+      fingerprint across visits. It's not a bug. It's how the web is built.</span>
+    </p>
+    <div class="privacy">
+      🔒 <span class="cs">igy.cz si nic neukládá — server jen přečte, co mu prohlížeč sám pošle. Žádná databáze, žádné cookies.</span>
+      <span class="en">igy.cz stores nothing — the server only reads what your browser sends it. No database, no cookies.</span>
+    </div>
+    <div class="footer-link">
+      <a href="https://www.saiko.cz/">← saiko.cz</a>
+      <a href="https://github.com/dsaiko/igy.cz" target="_blank" rel="noopener">GitHub ↗</a>
+    </div>
+  </section>
+</main>
+
+<script is:inline>
+(function(){
+  'use strict';
+  var T = function(){ return window.__lang === 'en' ? 'en' : 'cs'; };
+  function tr(cs, en){ return T() === 'en' ? en : cs; }
+  function reduced(){ try { return window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(e){ return false; } }
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  // Uložený "surový" stav, aby šlo vše přerenderovat při přepnutí jazyka
+  // (jinak by JS-doplňované hodnoty zůstaly v původním jazyce).
+  var S = { whoami:null, hero:null, device:false, browser:false, webrtc:null,
+            fp:null, sc:null, adblockOn:null, adblockRegion:null, originReady:false };
+
+  // --- helper pro vyplnění řádků (reset tříd → korektní i při re-renderu) ---
+  function set(id, val, cls){
+    var el = document.getElementById('v-' + id);
+    if (!el) return;
+    el.classList.remove('pending', 'hot', 'danger');
+    if (cls) el.classList.add(cls);
+    el.textContent = (val === null || val === undefined || val === '') ? '—' : val;
+  }
+
+  // ===================== 01 · SÍŤ (server) =====================
+  fetch('/api/whoami', { cache: 'no-store' }).then(function(r){ return r.ok ? r.json() : Promise.reject(); }).then(function(d){
+    S.whoami = d;
+    window.__whoami = d;            // sdílíme pro triangulaci původu (panel 05)
+    renderNet();
+    revealHero(d);
+    if (S.originReady) renderOrigin(); // doplň IP-zemi do triangulace
+    if (S.dossierReady) renderDossier();
+  }).catch(function(){
+    S.whoami = false;
+    renderNet();
+    revealHero(null);
+    if (S.originReady) renderOrigin();
+    if (S.dossierReady) renderDossier();
+  });
+
+  function renderNet(){
+    var d = S.whoami;
+    if (d == null) return;          // ještě neproběhlo → řádky zůstávají "…"
+    if (d === false){
+      ['ip','ipver','city','region','country','isp','colo','proto','tls','rtt'].forEach(function(id){
+        set(id, tr('(jen na nasazeném webu)', '(only on deployed site)'));
+      });
+      return;
+    }
+    set('ip', d.ip, 'hot');
+    set('ipver', d.ipVersion ? ('IPv' + d.ipVersion) : null);
+    set('city', d.geo.city);
+    set('region', d.geo.region);
+    var cn = d.geo.countryName ? d.geo.countryName[T()] : d.geo.country;
+    set('country', cn ? (cn + (d.geo.isEU ? ' · EU' : '')) : d.geo.country);
+    set('isp', d.network.asOrganization ? (d.network.asOrganization + (d.network.asn ? '  ·  AS' + d.network.asn : '')) : (d.network.asn ? 'AS' + d.network.asn : null), 'hot');
+    set('colo', d.network.colo ? (d.network.colo + tr('  (uzel Cloudflare)', '  (Cloudflare node)')) : null);
+    set('proto', d.network.httpProtocol);
+    set('tls', d.tls.version ? (d.tls.version + (d.tls.cipher ? '  ·  ' + d.tls.cipher : '')) : null);
+    set('rtt', (d.tls.clientTcpRtt != null) ? (d.tls.clientTcpRtt + ' ms') : null);
+    renderGeoMap();
+  }
+
+  // OpenStreetMap helpers (reálná mapa jako podklad + proklik).
+  function osmEmbed(la, lo, d){ d = d || 0.02; var bbox = (lo-d)+','+(la-d)+','+(lo+d)+','+(la+d);
+    return 'https://www.openstreetmap.org/export/embed.html?bbox=' + encodeURIComponent(bbox) + '&layer=mapnik&marker=' + encodeURIComponent(la + ',' + lo); }
+  function osmLink(la, lo, z){ z = z || 14; return 'https://www.openstreetmap.org/?mlat=' + la + '&mlon=' + lo + '#map=' + z + '/' + la + '/' + lo; }
+
+  // Mapový "reticle" podle IP: reálná (ztlumená) mapa jako podklad + zaměřovač
+  // nakreslený přes ni na průhledném canvasu.
+  var geoMapStarted = false;
+  function renderGeoMap(){
+    var d = S.whoami; if (!d || d === false) return;
+    var lat = d.geo.latitude, lon = d.geo.longitude;
+    if (lat == null || lon == null) return;
+    var wrap = document.getElementById('geo-wrap'); if (!wrap) return;
+    wrap.hidden = false;
+    var city = d.geo.city || (d.geo.countryName ? d.geo.countryName[T()] : d.geo.country) || '';
+    var cap = document.getElementById('geo-cap-txt');
+    if (cap) cap.textContent = (city ? city + '  ·  ' : '') + (+lat).toFixed(4) + ', ' + (+lon).toFixed(4);
+    var osm = document.getElementById('geo-osm');
+    if (osm) osm.href = osmLink(lat, lon, 12);
+    var frameEl = document.getElementById('geo-map-frame');
+    if (frameEl && !frameEl.src) frameEl.src = osmEmbed(+lat, +lon, 0.06);
+
+    var canvas = document.getElementById('geo-map'); if (!canvas) return;
+    var ctx = canvas.getContext('2d'); if (!ctx) return;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var W = 760, H = 240;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var cx = W / 2, cy = H / 2;
+
+    function frame(t){
+      ctx.clearRect(0, 0, W, H);   // průhledné → prosvítá mapa pod canvasem
+      // pulzující kruhy
+      var phase = (t % 2600) / 2600;
+      for (var k = 0; k < 3; k++){
+        var p = (phase + k / 3) % 1;
+        ctx.beginPath(); ctx.arc(cx, cy, 20 + p * 96, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(56,232,200,' + (0.5 * (1 - p)) + ')'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+      // kříž
+      ctx.strokeStyle = 'rgba(56,232,200,0.6)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx - 130, cy); ctx.lineTo(cx + 130, cy);
+      ctx.moveTo(cx, cy - 90); ctx.lineTo(cx, cy + 90); ctx.stroke();
+      // střed
+      ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fillStyle = '#ff5c6c'; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,92,108,0.8)'; ctx.lineWidth = 2; ctx.stroke();
+      // popisky (se stínem kvůli čitelnosti nad mapou)
+      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 6;
+      ctx.fillStyle = 'rgba(232,237,242,0.95)'; ctx.font = '13px ui-monospace, monospace'; ctx.textAlign = 'left';
+      ctx.fillText((T() === 'en' ? 'TARGET LOCKED' : 'CÍL ZAMĚŘEN'), 14, 24);
+      ctx.fillStyle = 'rgba(56,232,200,0.95)';
+      ctx.fillText(city.toUpperCase(), 14, H - 16);
+      ctx.shadowBlur = 0;
+      if (!reduced()) requestAnimationFrame(frame);
+    }
+    if (reduced()){ frame(0); return; }
+    if (geoMapStarted) return; geoMapStarted = true;
+    frame(0);
+  }
+
+  // ===================== WebRTC IP leak (panel 01) =====================
+  // Lokální kandidáti jsou plně lokální (nic neodchází). Veřejná IP se zjistí
+  // přes veřejný STUN server — odhalí reálnou IP i jiným kanálem než HTTP.
+  function collectWebRTC(){
+    var RTC = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
+    if (!RTC){ S.webrtc = { unsupported: true }; renderWebRTC(); return; }
+    var locals = {}, publics = {}, mdns = false;
+    var reIP = /([0-9]{1,3}(\.[0-9]{1,3}){3})|([a-f0-9]{1,4}(:[a-f0-9]{0,4}){2,7})/i;
+    var pc;
+    try { pc = new RTC({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }); }
+    catch(e){ S.webrtc = { blocked: true }; renderWebRTC(); return; }
+    pc.createDataChannel('x');
+    pc.onicecandidate = function(e){
+      if (!e || !e.candidate || !e.candidate.candidate){ finish(); return; }
+      var c = e.candidate.candidate;
+      if (/\.local/i.test(c)) { mdns = true; }
+      var m = c.match(reIP);
+      if (m){
+        var ip = m[0];
+        if (/ typ host /.test(c) || / typ prflx /.test(c)) locals[ip] = 1;
+        if (/ typ srflx /.test(c)) publics[ip] = 1;
+      }
+    };
+    pc.createOffer().then(function(o){ return pc.setLocalDescription(o); }).catch(function(){});
+    var done = false;
+    function finish(){
+      if (done) return; done = true;
+      S.webrtc = { locals: Object.keys(locals), publics: Object.keys(publics), mdns: mdns };
+      renderWebRTC();
+      try { pc.close(); } catch(_){}
+    }
+    setTimeout(finish, 2500);
+  }
+  function renderWebRTC(){
+    var w = S.webrtc; if (!w) return;
+    if (w.unsupported){ set('rtc-local', tr('nepodporováno','unsupported')); set('rtc-public', tr('nepodporováno','unsupported')); return; }
+    if (w.blocked){ set('rtc-local', tr('blokováno','blocked')); set('rtc-public', tr('blokováno','blocked')); return; }
+    if (w.locals && w.locals.length) set('rtc-local', w.locals.join(', '), 'danger');
+    else set('rtc-local', w.mdns ? tr('skryto (mDNS chrání)','hidden (mDNS protects)') : '—');
+    var pub = w.publics && w.publics.length;
+    set('rtc-public', pub ? w.publics.join(', ') : '—', pub ? 'danger' : '');
+  }
+  collectWebRTC();
+
+  // ===================== HERO scan + personalizace =====================
+  var scanEl = document.getElementById('scanline');
+  var heroDone = false, heroTyping = false;
+
+  function heroPlace(){ var h = S.hero || {}; return h.city || (h.cn ? h.cn[T()] : ''); }
+  function heroLines(){
+    var place = heroPlace(), isp = (S.hero && S.hero.isp) || '';
+    if (place || isp){
+      return [
+        tr('> navazuji spojení…', '> establishing connection…'),
+        tr('> mám tě.', '> got you.'),
+        (place ? tr('Píšeš z místa: ', 'You\'re writing from: ') + place : '') +
+        (isp ? (place ? ',  ' : '') + tr('přes ', 'via ') + isp : '') + '.',
+      ].filter(Boolean);
+    }
+    return [ tr('> navazuji spojení…', '> establishing connection…'),
+             tr('> čtu, co mi prohlížeč prozradí…', '> reading what your browser reveals…') ];
+  }
+  function showCue(){ var c = document.getElementById('scrollcue'); if (c) c.classList.add('show'); }
+  function renderHeroFinal(){
+    var place = heroPlace(), isp = (S.hero && S.hero.isp) || '';
+    var html = heroLines().map(esc).join('<br>');
+    if (place) html = html.replace(esc(place), '<b>' + esc(place) + '</b>');
+    if (isp)   html = html.replace(esc(isp), '<b>' + esc(isp) + '</b>');
+    scanEl.innerHTML = html;
+  }
+  function typeHero(){
+    heroTyping = true;
+    var lines = heroLines(), li = 0, ci = 0, html = '';
+    (function step(){
+      if (li >= lines.length){ heroTyping = false; renderHeroFinal(); showCue(); return; }
+      var line = lines[li];
+      if (ci <= line.length){
+        scanEl.innerHTML = html + esc(line.slice(0, ci)) + '<span class="cursor">&nbsp;</span>';
+        ci++; setTimeout(step, 24);
+      } else {
+        html += esc(line) + '<br>'; li++; ci = 0; setTimeout(step, 260);
+      }
+    })();
+  }
+  function revealHero(d){
+    if (heroDone) return; heroDone = true;
+    S.hero = {
+      city: (d && d.geo && d.geo.city) || '',
+      cn:   (d && d.geo && d.geo.countryName) || null,
+      isp:  (d && d.network && d.network.asOrganization) || ''
+    };
+    if (reduced()){ renderHeroFinal(); showCue(); } else { typeHero(); }
+  }
+  // i kdyby fetch visel, rozjeď hero po chvíli
+  setTimeout(function(){ revealHero(null); }, 2600);
+
+  // ===================== 02 · ZAŘÍZENÍ =====================
+  function collectDevice(){
+    S.device = true;
+    renderDevice();
+    collectMediaDevices();
+  }
+  function renderDevice(){
+    var n = navigator, s = screen;
+    set('platform', (n.userAgentData && n.userAgentData.platform) || n.platform || null);
+    set('cores', n.hardwareConcurrency ? (n.hardwareConcurrency + tr(' jader', ' cores')) : null, 'hot');
+    set('ram', n.deviceMemory ? ('≥ ' + n.deviceMemory + ' GB') : tr('skryto', 'hidden'), n.deviceMemory ? 'hot' : '');
+    set('touch', (n.maxTouchPoints || 0) + (n.maxTouchPoints > 0 ? tr('  · dotykové', '  · touch') : tr('  · myš', '  · mouse')));
+    set('screen', s.width + ' × ' + s.height, 'hot');
+    set('viewport', window.innerWidth + ' × ' + window.innerHeight);
+    set('dpr', (window.devicePixelRatio || 1) + '×');
+    set('depth', s.colorDepth + '-bit');
+    set('os', guessOS());
+    var gpu = getGPU();
+    set('gpu', gpu || tr('skryto', 'hidden'), gpu ? 'hot' : '');
+    var g = guessDevice();
+    set('device-guess', g ? (g.name + '  ·  ' + g.price) : tr('nelze odhadnout', 'cannot guess'), g ? 'hot' : '');
+    renderMedia();
+  }
+  // Hrubý (schválně drzý) odhad zařízení a jeho ceny z GPU a UA.
+  function guessDevice(){
+    var gpu = getGPU() || '', ua = navigator.userAgent;
+    var m = gpu.match(/Apple (M\d[A-Za-z ]*)/);
+    if (m) return { name: 'MacBook / Mac (' + m[1].trim() + ')', price: tr('~40–90 tis. Kč', '~$2000–4000') };
+    if (/\b(iPhone)\b/.test(ua)) return { name: 'iPhone', price: tr('~15–35 tis. Kč', '~$700–1500') };
+    if (/\b(iPad)\b/.test(ua)) return { name: 'iPad', price: tr('~12–30 tis. Kč', '~$600–1300') };
+    if (/Android/.test(ua)) return { name: tr('Android telefon/tablet', 'Android phone/tablet'), price: tr('~5–30 tis. Kč', '~$200–1300') };
+    var rtx = gpu.match(/(RTX|GTX)\s?\d{3,4}\s?(Ti|Super)?/i);
+    if (rtx) return { name: tr('herní PC (NVIDIA ', 'gaming PC (NVIDIA ') + rtx[0].trim() + ')', price: tr('~25–60 tis. Kč', '~$1200–3000') };
+    var rad = gpu.match(/Radeon[^,)]*/i);
+    if (rad) return { name: 'PC (' + rad[0].trim() + ')', price: tr('~15–45 tis. Kč', '~$700–2200') };
+    if (/Intel/i.test(gpu)) return { name: tr('kancelářský/laptop (Intel grafika)', 'office/laptop (Intel graphics)'), price: tr('~10–25 tis. Kč', '~$500–1200') };
+    return null;
+  }
+
+  // Počet a typ A/V zařízení — dostupné i BEZ svolení (labely jsou prázdné,
+  // ale počet a kind ne). Lidi čekají, že tohle jde až po povolení.
+  function collectMediaDevices(){
+    if (S.media) { renderMedia(); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices){ S.media = { unsupported: true }; renderMedia(); return; }
+    navigator.mediaDevices.enumerateDevices().then(function(list){
+      var cams = 0, mics = 0;
+      list.forEach(function(d){ if (d.kind === 'videoinput') cams++; else if (d.kind === 'audioinput') mics++; });
+      S.media = { cams: cams, mics: mics };
+      renderMedia();
+      if (S.dossierReady) renderDossier();
+    }).catch(function(){ S.media = { error: true }; renderMedia(); });
+  }
+  function renderMedia(){
+    var m = S.media;
+    if (!m){ set('media-cam', tr('zjišťuji…','checking…')); set('media-mic', tr('zjišťuji…','checking…')); return; }
+    if (m.unsupported || m.error){ set('media-cam', '—'); set('media-mic', '—'); return; }
+    set('media-cam', m.cams + tr(m.cams===1?' kamera':' kamer', m.cams===1?' camera':' cameras'), m.cams ? 'danger' : '');
+    set('media-mic', m.mics + tr(m.mics===1?' mikrofon':' mikrofonů', m.mics===1?' mic':' mics'), m.mics ? 'danger' : '');
+  }
+  function guessOS(){
+    var u = navigator.userAgent;
+    if (/Windows NT 10/.test(u)) return 'Windows 10/11';
+    if (/Mac OS X/.test(u)) return 'macOS';
+    if (/Android/.test(u)) return 'Android';
+    if (/(iPhone|iPad|iPod)/.test(u)) return 'iOS / iPadOS';
+    if (/Linux/.test(u)) return 'Linux';
+    return tr('neznámý', 'unknown');
+  }
+
+  // ===================== 03 · PROHLÍŽEČ =====================
+  function collectBrowser(){ S.browser = true; renderBrowser(); }
+  function renderBrowser(){
+    var n = navigator;
+    set('browser', guessBrowser());
+    set('engine', guessEngine());
+    set('langs', (n.languages && n.languages.join(', ')) || n.language || null, 'hot');
+    var tz = (Intl.DateTimeFormat().resolvedOptions().timeZone) || null;
+    set('tz', tz, 'hot');
+    set('localtime', new Date().toLocaleString());
+    try {
+      set('locale', (1234567.89).toLocaleString() + '  ·  ' + new Intl.NumberFormat().resolvedOptions().locale);
+    } catch(e){ set('locale', null); }
+    var dnt = n.doNotTrack || window.doNotTrack || (n.msDoNotTrack);
+    set('dnt', (dnt === '1' || dnt === 'yes') ? tr('zapnuto (web to může ignorovat)','on (sites may ignore it)') : tr('vypnuto', 'off'));
+    set('cookies', n.cookieEnabled ? tr('povolené', 'enabled') : tr('zakázané', 'disabled'));
+    set('ua', n.userAgent);
+  }
+  function guessBrowser(){
+    var u = navigator.userAgent;
+    if (navigator.brave) return 'Brave';
+    if (/Edg\//.test(u)) return 'Edge';
+    if (/OPR\//.test(u)) return 'Opera';
+    if (/Firefox\//.test(u)) return 'Firefox';
+    if (/Chrome\//.test(u)) return 'Chrome';
+    if (/Safari\//.test(u)) return 'Safari';
+    return tr('neznámý', 'unknown');
+  }
+  function guessEngine(){
+    var u = navigator.userAgent;
+    if (/Gecko\/|Firefox/.test(u) && !/like Gecko/.test(u)) return 'Gecko';
+    if (/AppleWebKit/.test(u) && /Chrome/.test(u)) return 'Blink';
+    if (/AppleWebKit/.test(u)) return 'WebKit';
+    return '—';
+  }
+
+  // ===================== 04 · OTISK =====================
+  // cyrb53 hash → krátký hex
+  function cyrb53(str, seed){
+    seed = seed || 0;
+    var h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+    for (var i = 0, ch; i < str.length; i++){
+      ch = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1>>>16), 2246822507) ^ Math.imul(h2 ^ (h2>>>13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2>>>16), 2246822507) ^ Math.imul(h1 ^ (h1>>>13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1>>>0)).toString(16);
+  }
+  function getGL(){
+    try {
+      var c = document.createElement('canvas');
+      return c.getContext('webgl') || c.getContext('experimental-webgl');
+    } catch(e){ return null; }
+  }
+  function getGPU(){
+    var gl = getGL(); if (!gl) return null;
+    try {
+      var ext = gl.getExtension('WEBGL_debug_renderer_info');
+      if (ext) return gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+      return gl.getParameter(gl.RENDERER);
+    } catch(e){ return null; }
+  }
+  function canvasFP(){
+    try {
+      var c = document.createElement('canvas'); c.width = 280; c.height = 60;
+      var ctx = c.getContext('2d');
+      ctx.textBaseline = 'top'; ctx.font = '16px "Arial"';
+      ctx.fillStyle = '#f60'; ctx.fillRect(0,0,140,30);
+      ctx.fillStyle = '#069'; ctx.fillText('I Google You · igy.cz 🛰', 4, 8);
+      ctx.fillStyle = 'rgba(56,232,200,0.7)'; ctx.fillText('I Google You · igy.cz 🛰', 6, 20);
+      ctx.beginPath(); ctx.arc(220, 30, 18, 0, Math.PI*2); ctx.fillStyle='rgba(255,92,108,0.6)'; ctx.fill();
+      return cyrb53(c.toDataURL());
+    } catch(e){ return null; }
+  }
+  function webglFP(){
+    var gl = getGL(); if (!gl) return null;
+    try {
+      var parts = [];
+      var keys = ['VERSION','SHADING_LANGUAGE_VERSION','VENDOR','RENDERER','MAX_TEXTURE_SIZE','MAX_VIEWPORT_DIMS','MAX_RENDERBUFFER_SIZE'];
+      keys.forEach(function(k){ try { parts.push(k + '=' + gl.getParameter(gl[k])); } catch(e){} });
+      var ext = gl.getSupportedExtensions(); if (ext) parts.push(ext.join(','));
+      return cyrb53(parts.join('|'));
+    } catch(e){ return null; }
+  }
+  function audioFP(){
+    return new Promise(function(resolve){
+      try {
+        var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!OAC){ resolve(null); return; }
+        var ctx = new OAC(1, 5000, 44100);
+        var osc = ctx.createOscillator(); osc.type = 'triangle'; osc.frequency.value = 10000;
+        var comp = ctx.createDynamicsCompressor();
+        osc.connect(comp); comp.connect(ctx.destination); osc.start(0);
+        ctx.startRendering();
+        ctx.oncomplete = function(e){
+          var d = e.renderedBuffer.getChannelData(0); var sum = 0;
+          for (var i = 4000; i < 5000; i++) sum += Math.abs(d[i]);
+          resolve(cyrb53(String(sum)));
+          try { osc.disconnect(); comp.disconnect(); } catch(_){}
+        };
+        setTimeout(function(){ resolve(null); }, 1500);
+      } catch(e){ resolve(null); }
+    });
+  }
+  function fontFP(){
+    var base = ['monospace','sans-serif','serif'];
+    var test = ['Arial','Calibri','Cambria','Comic Sans MS','Courier New','Georgia',
+      'Helvetica Neue','Impact','Tahoma','Times New Roman','Trebuchet MS','Verdana',
+      'Segoe UI','Roboto','Menlo','Monaco','Consolas','Ubuntu','Cantarell','DejaVu Sans'];
+    var s = document.createElement('span');
+    s.style.cssText = 'position:absolute;left:-9999px;font-size:72px;';
+    s.textContent = 'mmmmmmmmmmlli';
+    document.body.appendChild(s);
+    function dims(font){ s.style.fontFamily = font; return s.offsetWidth + 'x' + s.offsetHeight; }
+    var baseDims = {}; base.forEach(function(b){ baseDims[b] = dims(b); });
+    var found = [];
+    test.forEach(function(f){
+      for (var i = 0; i < base.length; i++){
+        if (dims("'" + f + "'," + base[i]) !== baseDims[base[i]]){ found.push(f); break; }
+      }
+    });
+    document.body.removeChild(s);
+    return found;
+  }
+
+  // ETag "supercookie" — bezstavový tracking přes cache (functions/api/etag.js).
+  function collectSupercookie(){
+    // default cache mode → prohlížeč při revalidaci sám pošle If-None-Match
+    fetch('/api/etag').then(function(r){ return r.ok ? r.json() : Promise.reject(); })
+      .then(function(d){ S.sc = d; renderSupercookie(); if (S.dossierReady) renderDossier(); })
+      .catch(function(){ S.sc = { error: true }; renderSupercookie(); if (S.dossierReady) renderDossier(); });
+  }
+  function renderSupercookie(){
+    var idEl = document.getElementById('sc-id'), note = document.getElementById('sc-note');
+    if (!idEl || !note || !S.sc) return;
+    var d = S.sc;
+    if (d.error){
+      idEl.textContent = '—'; idEl.classList.remove('danger');
+      note.textContent = tr('(jen na nasazeném webu)', '(only on deployed site)');
+      return;
+    }
+    idEl.textContent = d.id;
+    idEl.classList.toggle('danger', !!d.returning);
+    note.innerHTML = d.returning
+      ? tr('Poznávám tě — tohle ID ti sedí v <b>cache</b>. Vrátil ses, i kdybys mezitím smazal cookies.',
+           'I recognize you — this ID lives in your <b>cache</b>. You came back, even if you cleared cookies.')
+      : tr('Právě jsem ti ho přiřadil a uložil do cache. <b>Smaž si teď cookies a načti znovu</b> — pozdravím tě stejným ID.',
+           'I just assigned it and cached it. <b>Clear your cookies now and reload</b> — I\'ll greet you with the same ID.');
+  }
+
+  function collectFingerprint(){
+    collectSupercookie();
+    var bar = document.getElementById('fp-progress');
+    var steps = 0, totalSteps = 4;
+    function bump(){ steps++; if (bar) bar.style.width = Math.round(steps/totalSteps*100) + '%'; }
+
+    var cv = canvasFP(); var wg = webglFP(); var fonts = fontFP();
+    S.fp = { cv: cv, wg: wg, fonts: fonts, au: null, audioDone: false, id: null };
+    renderFpRows(); bump(); bump(); bump();
+
+    audioFP().then(function(au){
+      S.fp.au = au; S.fp.audioDone = true;
+      renderFpRows(); bump();
+      // složený otisk (jazykově nezávislý)
+      var combined = [cv, wg, au, fonts.join(','), getGPU(),
+        navigator.userAgent, navigator.language,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+        screen.width + 'x' + screen.height + 'x' + screen.colorDepth,
+        (navigator.hardwareConcurrency||'') + '/' + (navigator.deviceMemory||'')
+      ].join('::');
+      S.fp.id = cyrb53(combined, 1).toUpperCase().padStart(11,'0');
+      animateFpId(S.fp.id);
+      if (S.dossierReady) renderDossier();
+    });
+  }
+  function renderFpRows(){
+    if (!S.fp) return;
+    set('fp-canvas', S.fp.cv || tr('blokováno', 'blocked'), S.fp.cv ? 'hot':'');
+    set('fp-webgl', S.fp.wg || tr('blokováno', 'blocked'), S.fp.wg ? 'hot':'');
+    if (S.fp.audioDone) set('fp-audio', S.fp.au || tr('blokováno', 'blocked'), S.fp.au ? 'hot':'');
+    var f = S.fp.fonts || [];
+    set('fp-fonts', f.length + tr(' z 20  ·  ', ' of 20  ·  ') + f.slice(0,6).join(', ') + (f.length>6?'…':''), 'hot');
+    var sw = softwareFromFonts(f);
+    set('fp-software', sw.length ? sw.join(', ') : tr('nic jednoznačného', 'nothing conclusive'), sw.length ? 'danger' : '');
+  }
+  // Odvození nainstalovaného softwaru/OS z detekovaných fontů (best-effort).
+  function softwareFromFonts(fonts){
+    var has = {}; (fonts||[]).forEach(function(f){ has[f] = 1; });
+    var out = [];
+    if (has['Calibri'] || has['Cambria']) out.push('MS Office');
+    if (has['Segoe UI']) out.push('Windows');
+    if (has['Helvetica Neue'] || has['Menlo'] || has['Monaco']) out.push('macOS');
+    if (has['Ubuntu'] || has['Cantarell'] || has['DejaVu Sans']) out.push('Linux');
+    // dedup při zachování pořadí
+    return out.filter(function(v, i){ return out.indexOf(v) === i; });
+  }
+  function animateFpId(fid){
+    var idEl = document.getElementById('fp-id'); if (!idEl) return;
+    if (reduced()){ idEl.textContent = fid; return; }
+    var target = fid.split(''), glyphs = '0123456789ABCDEF', frame = 0;
+    var iv = setInterval(function(){
+      frame++;
+      idEl.textContent = target.map(function(ch, i){
+        return (frame > i*2+4) ? ch : glyphs[(frame + i) % 16];
+      }).join('');
+      if (frame > target.length*2 + 6){ clearInterval(iv); idEl.textContent = fid; }
+    }, 45);
+  }
+
+  // ===================== 05 · PŮVOD (triangulace) =====================
+  // Spolehlivý "bait": element s reklamními třídami. Pokud ho adblock schová
+  // (výška 0 / display none), je aktivní. Plně lokální, nic neodchází.
+  function detectAdblock(cb){
+    var bait = document.createElement('div');
+    bait.className = 'ad ads adsbox ad-banner ad-placement pub_300x250 textads banner_ad sponsored';
+    bait.style.cssText = 'position:absolute!important;left:-9999px;top:-9999px;width:300px;height:250px;';
+    bait.innerHTML = '&nbsp;';
+    document.body.appendChild(bait);
+    setTimeout(function(){
+      var blocked = !bait.offsetHeight || !bait.offsetParent ||
+        bait.clientHeight === 0 || getComputedStyle(bait).display === 'none' ||
+        getComputedStyle(bait).visibility === 'hidden';
+      try { document.body.removeChild(bait); } catch(_){}
+      cb(blocked);
+    }, 130);
+  }
+
+  // Best-effort detekce regionálního filtru přes cosmetic baiting. Selektory
+  // se mění → je to orientační (a po nasazení doladíme reálné baity).
+  // Mapuje "kosmetické pravidlo, které řeší hlavně daný regionální seznam" → země.
+  var REGION_BAITS = [
+    { country: 'CZ', sel: 'div', cls: 'reklama reklamni-banner inzerce' },
+    { country: 'PL', sel: 'div', cls: 'reklama-box rekl' },
+  ];
+  function detectRegionFilter(cb){
+    var nodes = REGION_BAITS.map(function(b){
+      var el = document.createElement(b.sel);
+      el.className = b.cls;
+      el.style.cssText = 'position:absolute!important;left:-9999px;top:-9999px;width:280px;height:90px;';
+      el.innerHTML = '&nbsp;';
+      document.body.appendChild(el);
+      return el;
+    });
+    setTimeout(function(){
+      var hit = null;
+      for (var i = 0; i < nodes.length; i++){
+        var el = nodes[i];
+        var blocked = !el.offsetHeight || !el.offsetParent || getComputedStyle(el).display === 'none';
+        if (blocked && !hit) hit = REGION_BAITS[i].country;
+      }
+      nodes.forEach(function(n){ try { document.body.removeChild(n); } catch(_){} });
+      cb(hit);
+    }, 150);
+  }
+
+  var FLAG = { CZ:'🇨🇿', SK:'🇸🇰', PL:'🇵🇱', DE:'🇩🇪', AT:'🇦🇹', US:'🇺🇸', GB:'🇬🇧' };
+  var CNAME = { CZ:{cs:'Česko',en:'Czechia'}, SK:{cs:'Slovensko',en:'Slovakia'},
+    PL:{cs:'Polsko',en:'Poland'}, DE:{cs:'Německo',en:'Germany'}, AT:{cs:'Rakousko',en:'Austria'},
+    US:{cs:'USA',en:'USA'}, GB:{cs:'Velká Británie',en:'United Kingdom'} };
+  function flag(cc){ return cc ? (FLAG[cc] || '🏳️') + ' ' + cc : ''; }
+
+  function tzCountry(tz){
+    if (!tz) return null;
+    var map = { 'Europe/Prague':'CZ','Europe/Bratislava':'SK','Europe/Warsaw':'PL',
+      'Europe/Berlin':'DE','Europe/Vienna':'AT','Europe/London':'GB',
+      'America/New_York':'US','America/Los_Angeles':'US','America/Chicago':'US' };
+    return map[tz] || null;
+  }
+  function langCountry(l){
+    if (!l) return null; l = l.toLowerCase();
+    if (l.indexOf('-') > 0) return l.split('-')[1].toUpperCase();
+    var map = { cs:'CZ', sk:'SK', pl:'PL', de:'DE', en:null };
+    return map[l] || null;
+  }
+
+  var adblockOn = null, adblockRegion = null;
+  function renderOrigin(){
+    var votes = {};
+    function vote(cc, n){ if (cc) votes[cc] = (votes[cc]||0) + (n||1); }
+
+    // 1) IP — nezávislý a silný signál (váha 2)
+    var ipCC = (S.whoami && S.whoami.geo && S.whoami.geo.country) || null;
+    if (ipCC){ set('o-ip', flag(ipCC), 'hot'); vote(ipCC, 2); }
+    else set('o-ip', tr('(jen na nasazeném webu)','(only on deployed site)'));
+
+    // 2) timezone (nezávislý)
+    var tz = null; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(e){}
+    var tzCC = tzCountry(tz);
+    set('o-tz', tz ? (tz + (tzCC ? '  → ' + flag(tzCC) : '')) : '—', tzCC ? 'hot':''); vote(tzCC);
+
+    // 3) jazyk (nezávislý)
+    var lang = (navigator.languages && navigator.languages[0]) || navigator.language || null;
+    var langCC = langCountry(lang);
+    set('o-lang', lang ? (lang + (langCC ? '  → ' + flag(langCC) : '')) : '—', langCC ? 'hot':''); vote(langCC);
+
+    // 4) locale / formát čísel — odvozeno z jazyka (jen zobrazení, NEHLASUJE,
+    //    aby se stejný signál nepočítal dvakrát).
+    try {
+      var loc = new Intl.NumberFormat().resolvedOptions().locale;
+      var locCC = langCountry(loc);
+      set('o-locale', (1234567.89).toLocaleString() + '  ·  ' + loc + (locCC ? '  → ' + flag(locCC) : ''), locCC ? 'hot':'');
+    } catch(e){ set('o-locale', '—'); }
+
+    // 5) adblock + regionální filtr (doplní se asynchronně)
+    if (adblockOn === null) set('o-adblock', tr('zjišťuji…','checking…'));
+    else set('o-adblock', adblockOn ? tr('ANO — máš blokovač','YES — blocker on') : tr('ne','no'), adblockOn ? 'hot':'');
+    if (adblockRegion){ set('o-adregion', flag(adblockRegion) + tr('  (podle filtru)','  (by filter)'), 'danger'); vote(adblockRegion, 2); }
+    else if (adblockOn === false) set('o-adregion', tr('—','—'));
+    else set('o-adregion', tr('zjišťuji…','checking…'));
+
+    // verdikt — země s nejvíc hlasy
+    var best = null, bestN = 0, total = 0;
+    Object.keys(votes).forEach(function(cc){ total += votes[cc]; if (votes[cc] > bestN){ bestN = votes[cc]; best = cc; } });
+    S.originBest = best;
+    if (S.dossierReady) renderDossier();
+    var vEl = document.getElementById('origin-verdict');
+    var nEl = document.getElementById('origin-note');
+    if (best){
+      var nm = CNAME[best] ? CNAME[best][T()] : best;
+      vEl.textContent = (FLAG[best]||'🏳️') + '  ' + nm;
+      nEl.innerHTML = tr(
+        'Souhlasí <b style="color:var(--accent)">' + bestN + '</b> z ' + total + ' hlasů. Odhaduju, že jsi z téhle země — i kdyby IP tvrdila něco jiného.',
+        '<b style="color:var(--accent)">' + bestN + '</b> of ' + total + ' votes agree. My guess where you\'re from — even if your IP says otherwise.'
+      );
+    } else {
+      vEl.textContent = '· · ·';
+    }
+  }
+
+  function collectOrigin(){
+    S.originReady = true;
+    renderOrigin();
+    detectAdblock(function(on){
+      adblockOn = on;
+      renderOrigin();
+      if (on){
+        detectRegionFilter(function(cc){ adblockRegion = cc; renderOrigin(); });
+      } else {
+        adblockRegion = null; renderOrigin();
+      }
+    });
+  }
+
+  // ===================== 06 · SVOLENÍ =====================
+  function bindPerms(){
+    var geo = document.getElementById('perm-geo');
+    geo && geo.addEventListener('click', function(){
+      var pr = document.getElementById('pr-geo');
+      pr.textContent = tr('ptám se…', 'asking…');
+      if (!navigator.geolocation){ pr.textContent = tr('nedostupné','unavailable'); return; }
+      navigator.geolocation.getCurrentPosition(function(p){
+        pr.classList.add('danger');
+        var la = p.coords.latitude, lo = p.coords.longitude;
+        pr.textContent = la.toFixed(5) + ', ' + lo.toFixed(5) + '  ±' + Math.round(p.coords.accuracy) + 'm';
+        var box = document.getElementById('geo-precise');
+        var f = document.getElementById('geo-precise-map');
+        var lnk = document.getElementById('geo-precise-link');
+        if (f) f.src = osmEmbed(la, lo, 0.004);   // uličková úroveň
+        if (lnk) lnk.href = osmLink(la, lo, 17);
+        if (box) box.hidden = false;
+      }, function(){ pr.textContent = tr('odmítnuto','denied'); }, { enableHighAccuracy: true, timeout: 10000 });
+    });
+
+    var cam = document.getElementById('perm-cam');
+    cam && cam.addEventListener('click', function(){
+      var pr = document.getElementById('pr-cam');
+      pr.textContent = tr('ptám se…', 'asking…');
+      if (!navigator.mediaDevices){ pr.textContent = tr('nedostupné','unavailable'); return; }
+      navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream){
+        var track = stream.getVideoTracks()[0];
+        var st = track.getSettings ? track.getSettings() : {};
+        pr.classList.add('danger');
+        pr.textContent = (track.label || tr('kamera','camera')) + (st.width ? '  ' + st.width + '×' + st.height : '');
+        stream.getTracks().forEach(function(t){ t.stop(); });
+      }).catch(function(){ pr.textContent = tr('odmítnuto','denied'); });
+    });
+
+    var mic = document.getElementById('perm-mic');
+    mic && mic.addEventListener('click', function(){
+      var pr = document.getElementById('pr-mic');
+      pr.textContent = tr('ptám se…', 'asking…');
+      if (!navigator.mediaDevices){ pr.textContent = tr('nedostupné','unavailable'); return; }
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream){
+        var AC = window.AudioContext || window.webkitAudioContext;
+        var ac = new AC(); var src = ac.createMediaStreamSource(stream);
+        var an = ac.createAnalyser(); an.fftSize = 256; src.connect(an);
+        var buf = new Uint8Array(an.frequencyBinCount);
+        pr.classList.add('danger');
+        var t0 = Date.now();
+        (function tick(){
+          an.getByteFrequencyData(buf);
+          var sum = 0; for (var i=0;i<buf.length;i++) sum += buf[i];
+          var lvl = Math.round(sum / buf.length);
+          var bars = '█'.repeat(Math.min(20, Math.round(lvl/4)));
+          pr.textContent = tr('hladina ', 'level ') + lvl + '  ' + bars;
+          if (Date.now() - t0 < 8000) requestAnimationFrame(tick);
+          else { stream.getTracks().forEach(function(t){t.stop();}); ac.close(); pr.textContent += tr('  (stop)','  (stop)'); }
+        })();
+      }).catch(function(){ pr.textContent = tr('odmítnuto','denied'); });
+    });
+
+    var bat = document.getElementById('perm-battery');
+    bat && bat.addEventListener('click', function(){
+      var pr = document.getElementById('pr-battery');
+      if (!navigator.getBattery){ pr.textContent = tr('nedostupné (Safari/FF)','unavailable (Safari/FF)'); return; }
+      navigator.getBattery().then(function(b){
+        pr.classList.add('danger');
+        pr.textContent = Math.round(b.level*100) + '%  ' + (b.charging ? tr('· nabíjí se','· charging') : tr('· z baterie','· on battery'));
+      });
+    });
+  }
+
+  // ===================== 06 · CHOVÁNÍ (živě) =====================
+  // Posluchače navěsíme hned při načtení, ať se počítá od začátku.
+  var beh = { mouse:0, dist:0, clicks:0, keys:0, scroll:0, away:0, start:0, lastX:null, lastY:null };
+  function initBehavior(){
+    S.behavior = beh; beh.start = Date.now();
+    window.addEventListener('mousemove', function(e){
+      beh.mouse++;
+      if (beh.lastX != null){ var dx = e.clientX-beh.lastX, dy = e.clientY-beh.lastY; beh.dist += Math.sqrt(dx*dx+dy*dy); }
+      beh.lastX = e.clientX; beh.lastY = e.clientY;
+    }, { passive:true });
+    window.addEventListener('click', function(){ beh.clicks++; }, { passive:true });
+    window.addEventListener('keydown', function(){ beh.keys++; }, { passive:true });
+    window.addEventListener('scroll', function(){
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      var p = h > 0 ? Math.round(window.scrollY / h * 100) : 0; if (p > beh.scroll) beh.scroll = p;
+    }, { passive:true });
+    document.addEventListener('visibilitychange', function(){ if (document.hidden) beh.away++; });
+  }
+  function renderBehavior(){
+    var b = S.behavior; if (!b) return;
+    set('b-time', Math.round((Date.now()-b.start)/1000) + ' s', 'hot');
+    set('b-mouse', b.mouse + tr(' pohybů', ' moves'), b.mouse ? 'hot' : '');
+    set('b-dist', Math.round(b.dist) + ' px', b.dist ? 'hot' : '');
+    set('b-clicks', String(b.clicks));
+    set('b-keys', String(b.keys), b.keys ? 'hot' : '');
+    set('b-scroll', b.scroll + ' %');
+    set('b-away', b.away + (b.away ? tr('  · vím o tom', '  · I noticed') : ''), b.away ? 'danger' : '');
+  }
+  var behLoop = false;
+  function collectBehavior(){
+    if (behLoop) return; behLoop = true;
+    renderBehavior();
+    setInterval(renderBehavior, 500);
+  }
+
+  // ===================== FINÁLE · SPIS (dossier) =====================
+  function setText(id, txt){ var el = document.getElementById(id); if (el) el.textContent = txt; }
+  // Hrubý odhad entropie otisku → "jsi 1 z X".
+  function trackBits(){
+    var b = 10 + 4 + 4 + 3; // UA, obrazovka, timezone, jazyk (základ)
+    if (S.fp){ if (S.fp.cv) b += 16; if (S.fp.wg) b += 10; if (S.fp.au) b += 6; b += Math.min((S.fp.fonts||[]).length, 20) * 0.6; }
+    if (getGPU()) b += 5;
+    if (navigator.hardwareConcurrency) b += 2;
+    if (navigator.deviceMemory) b += 2;
+    return Math.round(b);
+  }
+  function collectDossier(){
+    S.dossierReady = true;
+    if (!S.device) collectDevice();
+    if (!S.browser) collectBrowser();
+    if (!S.fp) collectFingerprint();
+    if (!S.originReady) collectOrigin();
+    collectMediaDevices();
+    renderDossier();
+  }
+  function renderDossier(){
+    setText('ds-code', (S.fp && S.fp.id) ? ('#' + S.fp.id) : '#········');
+    var loc = '—';
+    if (S.whoami && S.whoami !== false && S.whoami.geo){
+      var g = S.whoami.geo, cn = g.countryName ? g.countryName[T()] : g.country;
+      loc = [g.city, cn].filter(Boolean).join(', ') || '—';
+    } else if (S.originBest){ loc = CNAME[S.originBest] ? CNAME[S.originBest][T()] : S.originBest; }
+    setText('ds-loc', loc);
+    setText('ds-ip', (S.whoami && S.whoami !== false && S.whoami.ip) ? S.whoami.ip : tr('(jen na nasazeném webu)', '(only on deployed site)'));
+    var gd = guessDevice();
+    setText('ds-device', gd ? gd.name : guessOS());
+    setText('ds-browser', guessBrowser() + ' · ' + guessEngine());
+    setText('ds-fp', (S.fp && S.fp.id) ? S.fp.id : tr('počítám…', 'computing…'));
+    var superTxt = '—';
+    if (S.sc){ superTxt = S.sc.error ? tr('(jen na nasazeném webu)', '(only on deployed site)')
+      : (S.sc.returning ? tr('ANO — poznán z cache', 'YES — recognized from cache') : tr('ID uloženo v cache', 'ID stored in cache')); }
+    setText('ds-super', superTxt);
+
+    var bits = trackBits();
+    setText('ds-track', bits >= 20 ? tr('VYSOKÁ', 'HIGH') : bits >= 12 ? tr('STŘEDNÍ', 'MEDIUM') : tr('NÍZKÁ', 'LOW'));
+    var oneIn = Math.pow(2, bits), nEl = document.getElementById('ds-track-note');
+    if (nEl){
+      if (oneIn > 8e9){
+        nEl.textContent = tr('Z nasbíraných znaků poskládám otisk s ~' + bits + ' bity entropie — prakticky unikátní mezi všemi prohlížeči na světě.',
+                             'The collected traits form a ~' + bits + '-bit fingerprint — practically unique among every browser on Earth.');
+      } else {
+        var x = Math.round(oneIn).toLocaleString();
+        nEl.textContent = tr('Otisk má ~' + bits + ' bitů entropie — jsi zhruba 1 z ' + x + '.',
+                             'The fingerprint carries ~' + bits + ' bits of entropy — you\'re roughly 1 in ' + x + '.');
+      }
+    }
+  }
+
+  // ===================== reveal při scrollu =====================
+  function setupReveal(runners){
+    var panels = document.querySelectorAll('[data-panel]');
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting){
+          e.target.classList.add('in');
+          var run = e.target.getAttribute('data-run');
+          if (run && runners[run] && !e.target.__ran){ e.target.__ran = true; runners[run](); }
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.25 });
+    panels.forEach(function(p){ io.observe(p); });
+  }
+
+  // přiřaď "runners" k panelům podle pořadí
+  // 0 Síť · 1 Zařízení · 2 Prohlížeč · 3 Otisk · 4 Původ · 5 Chování · 6 Svolení · 7 Retro · 8 Spis
+  var cards = document.querySelectorAll('[data-panel]');
+  if (cards[1]) cards[1].setAttribute('data-run','device');
+  if (cards[2]) cards[2].setAttribute('data-run','browser');
+  if (cards[3]) cards[3].setAttribute('data-run','fp');
+  if (cards[4]) cards[4].setAttribute('data-run','origin');
+  if (cards[5]) cards[5].setAttribute('data-run','behavior');
+  if (cards[6]) cards[6].setAttribute('data-run','perms');
+  if (cards[8]) cards[8].setAttribute('data-run','dossier');
+
+  // Přerenderuj vše jazykově závislé z uloženého stavu (při přepnutí CZ/EN).
+  function rerenderAll(){
+    renderNet();
+    renderWebRTC();
+    if (heroDone && !heroTyping) renderHeroFinal();
+    if (S.device) renderDevice();
+    if (S.browser) renderBrowser();
+    if (S.fp) renderFpRows();
+    if (S.sc) renderSupercookie();
+    if (S.originReady) renderOrigin();
+    if (S.behavior) renderBehavior();
+    if (S.dossierReady) renderDossier();
+  }
+
+  function start(){
+    initBehavior();
+    setupReveal({ device: collectDevice, browser: collectBrowser, fp: collectFingerprint,
+      origin: collectOrigin, behavior: collectBehavior, perms: bindPerms, dossier: collectDossier });
+    window.onLangChange = rerenderAll; // Layout volá při přepnutí vlajky
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
+</script>
+
+</Layout>

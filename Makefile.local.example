@@ -1,0 +1,3 @@
+# Zkopíruj na Makefile.local (ten je v .gitignore) a doplň své hodnoty.
+# Cloudflare account ID najdeš v dashboardu nebo přes `make whoami`.
+CF_ACCOUNT_ID := your-cloudflare-account-id
