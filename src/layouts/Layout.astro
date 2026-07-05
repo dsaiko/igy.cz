@@ -9,8 +9,10 @@ interface Props {
 }
 const { titleCs, titleEn } = Astro.props;
 
-// Cookieless analytika, stejný účet jako saiko (count.js přeskakuje localhost).
-const GOATCOUNTER = '';
+// Cookieless analytika GoatCounter (respektuje Do Not Track; count.js sám
+// přeskakuje localhost i file://). Vlastní web igy — kód "igy" je potřeba
+// jednorázově založit na https://www.goatcounter.com/. Prázdné = vypnuto.
+const GOATCOUNTER = 'https://igy.goatcounter.com/count';
 ---
 <!DOCTYPE html>
 <html lang="en">
