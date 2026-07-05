@@ -590,8 +590,8 @@ const fpRows = [
       </p>
       <div class="retro-grid">
         <div class="retro"><div class="rn">Flash</div><div class="rs">† 2020</div><div class="rd"><span class="cs">„Super-cookies", systémové info, mikrofon.</span><span class="en">"Super-cookies", system info, microphone.</span></div></div>
-        <div class="retro"><div class="rn">ActiveX</div><div class="rs">† IE only</div><div class="rd"><span class="cs">Plný přístup k Windows. Noční můra.</span><span class="en">Full Windows access. A nightmare.</span></div></div>
-        <div class="retro"><div class="rn">Java applety</div><div class="rs">† dead</div><div class="rd"><span class="cs">Běh kódu mimo sandbox prohlížeče.</span><span class="en">Code running outside the browser sandbox.</span></div></div>
+        <div class="retro"><div class="rn">ActiveX</div><div class="rs">† 2022</div><div class="rd"><span class="cs">Jen v IE, plný přístup k Windows. Noční můra.</span><span class="en">IE only, full Windows access. A nightmare.</span></div></div>
+        <div class="retro"><div class="rn">Java applety</div><div class="rs">† 2017</div><div class="rd"><span class="cs">Běh kódu mimo sandbox prohlížeče.</span><span class="en">Code running outside the browser sandbox.</span></div></div>
         <div class="retro"><div class="rn">Silverlight</div><div class="rs">† 2021</div><div class="rd"><span class="cs">Vlastní runtime, DRM, info o stroji.</span><span class="en">Own runtime, DRM, machine info.</span></div></div>
       </div>
     </div>
@@ -868,7 +868,22 @@ const fpRows = [
   }
   function renderDevice(){
     var n = navigator, s = screen;
-    set('platform', (n.userAgentData && n.userAgentData.platform) || n.platform || null);
+    // navigator.platform je "zmražený" — na Apple Silicon vrací "MacIntel".
+    // Zpřesníme: Chromium přes high-entropy client hints, Safari odhadem z GPU.
+    var plat = (n.userAgentData && n.userAgentData.platform) || n.platform || null;
+    set('platform', plat);
+    if (n.userAgentData && n.userAgentData.getHighEntropyValues){
+      n.userAgentData.getHighEntropyValues(['architecture','bitness']).then(function(h){
+        if (h && h.architecture){
+          set('platform', plat + '  ·  ' + h.architecture + (h.bitness ? '/' + h.bitness : ''), 'hot');
+        }
+      }).catch(function(){});
+    } else {
+      var gpu = getGPU() || '';
+      if (/Apple M\d/.test(gpu) && /MacIntel/i.test(plat || '')){
+        set('platform', plat + tr('  ·  ve skutečnosti Apple Silicon', '  ·  actually Apple Silicon'), 'hot');
+      }
+    }
     set('cores', n.hardwareConcurrency ? (n.hardwareConcurrency + tr(' jader', ' cores')) : null, 'hot');
     set('ram', n.deviceMemory ? ('≥ ' + n.deviceMemory + ' GB') : tr('skryto', 'hidden'), n.deviceMemory ? 'hot' : '');
     set('touch', (n.maxTouchPoints || 0) + (n.maxTouchPoints > 0 ? tr('  · dotykové', '  · touch') : tr('  · myš', '  · mouse')));
@@ -1337,9 +1352,11 @@ const fpRows = [
       var pr = document.getElementById('pr-battery');
       if (!navigator.getBattery){ pr.textContent = tr('nedostupné (Safari/FF)','unavailable (Safari/FF)'); return; }
       navigator.getBattery().then(function(b){
+        var lvl = (b && typeof b.level === 'number') ? b.level : NaN;
+        if (isNaN(lvl)){ pr.textContent = tr('nešlo přečíst (nejspíš stolní PC)','couldn\'t read it (likely a desktop)'); return; }
         pr.classList.add('danger');
-        pr.textContent = Math.round(b.level*100) + '%  ' + (b.charging ? tr('· nabíjí se','· charging') : tr('· z baterie','· on battery'));
-      });
+        pr.textContent = Math.round(lvl*100) + '%  ' + (b.charging ? tr('· nabíjí se','· charging') : tr('· z baterie','· on battery'));
+      }).catch(function(){ pr.textContent = tr('nešlo přečíst','couldn\'t read it'); });
     });
   }
 
