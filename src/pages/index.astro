@@ -38,7 +38,7 @@ const behaviorRows = [
   Row('b-dist', 'Ujetá vzdálenost', 'Distance travelled'),
   Row('b-clicks', 'Kliknutí', 'Clicks'),
   Row('b-keys', 'Stisky kláves', 'Keystrokes'),
-  Row('b-scroll', 'Nejhlouběji', 'Scrolled to'),
+  Row('b-scroll', 'Kam jsi doscrolloval', 'How far you scrolled'),
   Row('b-away', 'Kolikrát ses koukl jinam', 'Times you looked away'),
 ];
 const deviceRows = [
@@ -1385,7 +1385,7 @@ const fpRows = [
     set('b-dist', Math.round(b.dist) + ' px', b.dist ? 'hot' : '');
     set('b-clicks', String(b.clicks));
     set('b-keys', String(b.keys), b.keys ? 'hot' : '');
-    set('b-scroll', b.scroll + ' %');
+    set('b-scroll', b.scroll + tr(' % stránky', ' % of the page'));
     set('b-away', b.away + (b.away ? tr('  · vím o tom', '  · I noticed') : ''), b.away ? 'danger' : '');
   }
   var behLoop = false;
