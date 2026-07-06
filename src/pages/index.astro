@@ -448,6 +448,10 @@ const fpRows = [
           <span class="cs">Nevěříš? Otevři igy.cz v anonymním okně a porovnej ID.</span>
           <span class="en">Don't believe it? Open igy.cz in incognito and compare the ID.</span>
         </p>
+        <p class="incognito-try" style="margin-top:6px;">
+          <span class="cs">Výjimka: na iOS Safari se ID může měnit — Apple do otisku schválně přidává šum.</span>
+          <span class="en">Exception: on iOS Safari the ID may change — Apple deliberately adds anti-fingerprinting noise.</span>
+        </p>
       </div>
 
       <div class="sc-box" id="sc-box">
@@ -1065,10 +1069,12 @@ const fpRows = [
         ctx.oncomplete = function(e){
           var d = e.renderedBuffer.getChannelData(0); var sum = 0;
           for (var i = 4000; i < 5000; i++) sum += Math.abs(d[i]);
-          resolve(cyrb53(String(sum)));
+          // toFixed(2) spolkne drobný jitter (stabilnější mezi načteními),
+          // rozdíly dané enginem/hardwarem jsou větší a zůstanou zachovány.
+          resolve(cyrb53(sum.toFixed(2)));
           try { osc.disconnect(); comp.disconnect(); } catch(_){}
         };
-        setTimeout(function(){ resolve(null); }, 1500);
+        setTimeout(function(){ resolve(null); }, 3000);
       } catch(e){ resolve(null); }
     });
   }
@@ -1135,7 +1141,7 @@ const fpRows = [
       var combined = [cv, wg, au, fonts.join(','), getGPU(),
         navigator.userAgent, navigator.language,
         Intl.DateTimeFormat().resolvedOptions().timeZone,
-        screen.width + 'x' + screen.height + 'x' + screen.colorDepth,
+        Math.max(screen.width, screen.height) + 'x' + Math.min(screen.width, screen.height) + 'x' + screen.colorDepth,
         (navigator.hardwareConcurrency||'') + '/' + (navigator.deviceMemory||'')
       ].join('::');
       S.fp.id = cyrb53(combined, 1).toUpperCase().padStart(11,'0');
