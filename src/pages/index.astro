@@ -3,8 +3,9 @@ import Layout from '../layouts/Layout.astro';
 
 // "I Google You" — jedna dlouhá scrollovací stránka. Hero udělá dramatický
 // "scan", pak se při scrollu odhalují panely "dossieru": síť, zařízení,
-// prohlížeč, otisk (fingerprint) a volitelná svolení. Nic se neukládá ani
-// neodesílá — vše počítá prohlížeč u tebe, serverová data jen čte /api/whoami.
+// prohlížeč, otisk (fingerprint) a volitelná svolení. Nic se neukládá — vše
+// počítá prohlížeč u tebe, serverová data jen čte /api/whoami. Ven jde jen
+// STUN (WebRTC), OSM dlaždice, GoatCounter a po svolení GPS → Nominatim.
 
 // Helper: jeden řádek "klíč → hodnota" s místem (id), které doplní JS.
 const Row = (id: string, kCs: string, kEn: string) => ({ id, kCs, kEn });
@@ -718,18 +719,22 @@ const fpRows = [
 
   // Reverzní geokódování přes OpenStreetMap Nominatim (zdarma, bez klíče) →
   // celá adresa z GPS souřadnic. Uloží do S.precise.address a překreslí spis.
-  function reverseGeocode(la, lo){
+  // `fix` = objekt S.precise, ke kterému dotaz patří — pozdní odpověď na
+  // starší polohu (druhé kliknutí) se zahodí.
+  function reverseGeocode(la, lo, fix){
     var url = 'https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=18&lat=' + la + '&lon=' + lo;
     fetch(url, { headers: { 'Accept': 'application/json' } })
       .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
       .then(function(d){
+        if (S.precise !== fix) return;
         var addr = (d && d.display_name) ? d.display_name : null;
-        if (S.precise) S.precise.address = addr;
+        fix.address = addr;
         var el = document.getElementById('geo-precise-addr');
         if (el) el.textContent = addr || tr('adresu se nepodařilo zjistit', 'address lookup failed');
         if (S.dossierReady) renderDossier();
       })
       .catch(function(){
+        if (S.precise !== fix) return;
         var el = document.getElementById('geo-precise-addr');
         if (el) el.textContent = tr('adresu se nepodařilo zjistit', 'address lookup failed');
       });
@@ -874,20 +879,35 @@ const fpRows = [
       }
     })();
   }
-  function revealHero(d){
-    if (heroDone) return; heroDone = true;
-    S.hero = {
+  function heroData(d){
+    return {
       city: (d && d.geo && d.geo.city) || '',
       cn:   (d && d.geo && d.geo.countryName) || null,
       isp:  (d && d.network && d.network.asOrganization) || ''
     };
+  }
+  function revealHero(d){
+    if (heroDone){
+      // /api/whoami dorazilo až po watchdogu → dopersonalizuj. Běžící
+      // psaní si S.hero přečte samo na konci (renderHeroFinal).
+      if (d && S.hero && !heroPlace() && !S.hero.isp){
+        S.hero = heroData(d);
+        if (!heroTyping) renderHeroFinal();
+      }
+      return;
+    }
+    heroDone = true;
+    S.hero = heroData(d);
     if (reduced()){ renderHeroFinal(); showCue(); } else { typeHero(); }
   }
   // i kdyby fetch visel, rozjeď hero po chvíli
   setTimeout(function(){ revealHero(null); }, 2600);
 
   // ===================== 02 · ZAŘÍZENÍ =====================
+  // Kolektory jsou idempotentní: spouští je jak vlastní panel, tak spis
+  // (collectDossier) — podle toho, co uživatel uvidí dřív.
   function collectDevice(){
+    if (S.device) return;
     S.device = true;
     renderDevice();
     collectMediaDevices();
@@ -927,6 +947,8 @@ const fpRows = [
   // Hrubý (schválně drzý) odhad zařízení a jeho ceny z GPU a UA.
   function guessDevice(){
     var gpu = getGPU() || '', ua = navigator.userAgent;
+    // iPad s desktopovým UA dřív, než ho GPU (Apple M…) prohlásí za Mac.
+    if (isIPadDesktopUA()) return { name: 'iPad', price: tr('~12–30 tis. Kč', '~$600–1300') };
     var m = gpu.match(/Apple (M\d[A-Za-z ]*)/);
     if (m) return { name: 'MacBook / Mac (' + m[1].trim() + ')', price: tr('~40–90 tis. Kč', '~$2000–4000') };
     if (/\b(iPhone)\b/.test(ua)) return { name: 'iPhone', price: tr('~15–35 tis. Kč', '~$700–1500') };
@@ -960,12 +982,17 @@ const fpRows = [
     set('media-cam', m.cams + tr(m.cams===1?' kamera':' kamer', m.cams===1?' camera':' cameras'), m.cams ? 'danger' : '');
     set('media-mic', m.mics + tr(m.mics===1?' mikrofon':' mikrofonů', m.mics===1?' mic':' mics'), m.mics ? 'danger' : '');
   }
+  // iPadOS Safari se defaultně hlásí jako desktopový Mac ("Macintosh"),
+  // prozradí ho až dotyk.
+  function isIPadDesktopUA(){ return /Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1; }
   function guessOS(){
     var u = navigator.userAgent;
+    // iOS UA obsahuje "like Mac OS X" → musí jít před testem na macOS.
+    if (/(iPhone|iPad|iPod)/.test(u)) return 'iOS / iPadOS';
+    if (isIPadDesktopUA()) return 'iPadOS';
     if (/Windows NT 10/.test(u)) return 'Windows 10/11';
     if (/Mac OS X/.test(u)) return 'macOS';
     if (/Android/.test(u)) return 'Android';
-    if (/(iPhone|iPad|iPod)/.test(u)) return 'iOS / iPadOS';
     if (/Linux/.test(u)) return 'Linux';
     return tr('neznámý', 'unknown');
   }
@@ -991,10 +1018,12 @@ const fpRows = [
   function guessBrowser(){
     var u = navigator.userAgent;
     if (navigator.brave) return 'Brave';
-    if (/Edg\//.test(u)) return 'Edge';
-    if (/OPR\//.test(u)) return 'Opera';
-    if (/Firefox\//.test(u)) return 'Firefox';
-    if (/Chrome\//.test(u)) return 'Chrome';
+    // Na iOS mají prohlížeče vlastní tokeny (CriOS, FxiOS, EdgiOS…) a všechny
+    // navíc "Safari/" → musí se chytit dřív než Safari.
+    if (/Edg(A|iOS)?\//.test(u)) return 'Edge';
+    if (/(OPR|OPT|OPiOS)\//.test(u)) return 'Opera';
+    if (/(Firefox|FxiOS)\//.test(u)) return 'Firefox';
+    if (/(Chrome|CriOS)\//.test(u)) return 'Chrome';
     if (/Safari\//.test(u)) return 'Safari';
     return tr('neznámý', 'unknown');
   }
@@ -1125,6 +1154,9 @@ const fpRows = [
   }
 
   function collectFingerprint(){
+    // Druhý běh by znovu zavolal /api/etag — ten už by revalidoval čerstvě
+    // uložený ETag a prvonávštěvníkovi tvrdil "poznávám tě".
+    if (S.fp) return;
     collectSupercookie();
     var bar = document.getElementById('fp-progress');
     var steps = 0, totalSteps = 4;
@@ -1243,10 +1275,15 @@ const fpRows = [
     return map[tz] || null;
   }
   function langCountry(l){
-    if (!l) return null; l = l.toLowerCase();
-    if (l.indexOf('-') > 0) return l.split('-')[1].toUpperCase();
+    if (!l) return null;
+    // Region jen z opravdového region subtagu — ne ze skriptu (zh-Hans-CN,
+    // sr-Latn-RS) ani z číselného regionu (es-419).
+    var region = null;
+    try { region = new Intl.Locale(l).region || null; }
+    catch(e){ region = (l.split(/[-_]/).slice(1).filter(function(p){ return /^[a-z]{2}$/i.test(p); })[0]) || null; }
+    if (region) return /^[A-Z]{2}$/i.test(region) ? region.toUpperCase() : null;
     var map = { cs:'CZ', sk:'SK', pl:'PL', de:'DE', en:null };
-    return map[l] || null;
+    return map[l.toLowerCase().split(/[-_]/)[0]] || null;
   }
 
   var adblockOn = null, adblockRegion = null;
@@ -1281,7 +1318,7 @@ const fpRows = [
     if (adblockOn === null) set('o-adblock', tr('zjišťuji…','checking…'));
     else set('o-adblock', adblockOn ? tr('ANO — máš blokovač','YES — blocker on') : tr('ne','no'), adblockOn ? 'hot':'');
     if (adblockRegion){ set('o-adregion', flag(adblockRegion) + tr('  (podle filtru)','  (by filter)'), 'danger'); vote(adblockRegion, 2); }
-    else if (adblockOn === false) set('o-adregion', tr('—','—'));
+    else if (adblockOn === false || adblockRegion === false) set('o-adregion', tr('—','—'));
     else set('o-adregion', tr('zjišťuji…','checking…'));
 
     // verdikt — země s nejvíc hlasy
@@ -1304,15 +1341,17 @@ const fpRows = [
   }
 
   function collectOrigin(){
+    if (S.originReady) return;
     S.originReady = true;
     renderOrigin();
     detectAdblock(function(on){
       adblockOn = on;
       renderOrigin();
       if (on){
-        detectRegionFilter(function(cc){ adblockRegion = cc; renderOrigin(); });
+        // false = dozjišťováno bez shody (null znamená "ještě běží")
+        detectRegionFilter(function(cc){ adblockRegion = cc || false; renderOrigin(); });
       } else {
-        adblockRegion = null; renderOrigin();
+        adblockRegion = false; renderOrigin();
       }
     });
   }
@@ -1338,7 +1377,7 @@ const fpRows = [
         if (addr) addr.textContent = tr('zjišťuji adresu…', 'looking up address…');
         if (box) box.hidden = false;
         if (S.dossierReady) renderDossier();   // spis hned na GPS (bez čekání na adresu)
-        reverseGeocode(la, lo);                 // …a doplň celou adresu, až dorazí
+        reverseGeocode(la, lo, S.precise);      // …a doplň celou adresu, až dorazí
       }, function(){ pr.textContent = tr('odmítnuto','denied'); }, { enableHighAccuracy: true, timeout: 10000 });
     });
 
@@ -1367,15 +1406,28 @@ const fpRows = [
         var an = ac.createAnalyser(); an.fftSize = 256; src.connect(an);
         var buf = new Uint8Array(an.frequencyBinCount);
         pr.classList.add('danger');
-        var t0 = Date.now();
+        // Vypnutí NEZÁVISLÉ na requestAnimationFrame — ten se ve skryté
+        // záložce zastaví a mikrofon by běžel dál. Skrytí/odchod = hned stop.
+        var raf = 0, done = false, to = setTimeout(stop, 8000);
+        function onVis(){ if (document.hidden) stop(); }
+        function stop(){
+          if (done) return; done = true;
+          clearTimeout(to); cancelAnimationFrame(raf);
+          document.removeEventListener('visibilitychange', onVis);
+          window.removeEventListener('pagehide', stop);
+          stream.getTracks().forEach(function(t){ t.stop(); }); ac.close();
+          pr.textContent += tr('  (stop)','  (stop)');
+        }
+        document.addEventListener('visibilitychange', onVis);
+        window.addEventListener('pagehide', stop);
         (function tick(){
+          if (done) return;
           an.getByteFrequencyData(buf);
           var sum = 0; for (var i=0;i<buf.length;i++) sum += buf[i];
           var lvl = Math.round(sum / buf.length);
           var bars = '█'.repeat(Math.min(20, Math.round(lvl/4)));
           pr.textContent = tr('hladina ', 'level ') + lvl + '  ' + bars;
-          if (Date.now() - t0 < 8000) requestAnimationFrame(tick);
-          else { stream.getTracks().forEach(function(t){t.stop();}); ac.close(); pr.textContent += tr('  (stop)','  (stop)'); }
+          raf = requestAnimationFrame(tick);
         })();
       }).catch(function(){ pr.textContent = tr('odmítnuto','denied'); });
     });
@@ -1495,7 +1547,9 @@ const fpRows = [
           io.unobserve(e.target);
         }
       });
-    }, { threshold: 0.25 });
+    // Odhal, jakmile panel vjede do horních 80 % okna. (Dřív threshold 0.25
+    // poměru panelu — panel vyšší než 4× okno ho nikdy nedosáhl a zůstal skrytý.)
+    }, { threshold: 0, rootMargin: '0px 0px -20% 0px' });
     panels.forEach(function(p){ io.observe(p); });
   }
 
