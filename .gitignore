@@ -22,3 +22,6 @@ npm-debug.log*
 
 # Dočasné soubory
 _*.mjs
+
+# Artefakty AI review (fixpoint)
+.fixpoint/
