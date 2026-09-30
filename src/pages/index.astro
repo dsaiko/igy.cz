@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Rows from '../components/Rows.astro';
 
 // "I Google You" — jedna dlouhá scrollovací stránka. Hero udělá dramatický
 // "scan", pak se při scrollu odhalují panely "dossieru": síť, zařízení,
@@ -8,30 +9,34 @@ import Layout from '../layouts/Layout.astro';
 // STUN (WebRTC), OSM dlaždice, GoatCounter a po svolení GPS → Nominatim.
 
 // Helper: jeden řádek "klíč → hodnota" s místem (id), které doplní JS.
-const Row = (id: string, kCs: string, kEn: string) => ({ id, kCs, kEn });
+// tech = suchý technický údaj → schová se pod "technické detaily".
+const Row = (id: string, kCs: string, kEn: string, tech = false) => ({ id, kCs, kEn, tech });
 
 const netRows = [
   Row('ip', 'IP adresa', 'IP address'),
-  Row('ipver', 'Verze IP', 'IP version'),
   Row('city', 'Město', 'City'),
   Row('region', 'Region', 'Region'),
   Row('country', 'Země', 'Country'),
   Row('isp', 'Operátor / ASN', 'ISP / ASN'),
-  Row('colo', 'Prošel jsi přes', 'You routed via'),
-  Row('proto', 'Protokol', 'Protocol'),
-  Row('tls', 'TLS', 'TLS'),
-  Row('rtt', 'Latence k uzlu', 'Latency to node'),
+  Row('vpn', 'VPN / proxy', 'VPN / proxy'),
   Row('rtc-local', 'Lokální IP (WebRTC)', 'Local IP (WebRTC)'),
   Row('rtc-public', 'Veřejná IP (STUN)', 'Public IP (STUN)'),
+  Row('ipver', 'Verze IP', 'IP version', true),
+  Row('conn', 'Typ připojení', 'Connection type', true),
+  Row('colo', 'Prošel jsi přes', 'You routed via', true),
+  Row('proto', 'Protokol', 'Protocol', true),
+  Row('tls', 'TLS', 'TLS', true),
+  Row('rtt', 'Latence k uzlu', 'Latency to node', true),
 ];
 // Signály pro triangulaci původu (panel 05). Texty řádků doplní JS.
 const originRows = [
   Row('o-ip', 'Podle IP', 'By IP'),
   Row('o-tz', 'Časové pásmo', 'Time zone'),
   Row('o-lang', 'Jazyk prohlížeče', 'Browser language'),
-  Row('o-locale', 'Formát čísel', 'Number format'),
+  Row('o-kbd', 'Klávesnice', 'Keyboard layout'),
   Row('o-adblock', 'Adblock', 'Adblock'),
   Row('o-adregion', 'Regionální filtr', 'Regional filter'),
+  Row('o-locale', 'Formát čísel', 'Number format', true),
 ];
 const behaviorRows = [
   Row('b-time', 'Čas na stránce', 'Time on page'),
@@ -41,32 +46,37 @@ const behaviorRows = [
   Row('b-keys', 'Stisky kláves', 'Keystrokes'),
   Row('b-scroll', 'Kam jsi doscrolloval', 'How far you scrolled'),
   Row('b-away', 'Kolikrát ses koukl jinam', 'Times you looked away'),
+  Row('b-copy', 'Co sis zkopíroval', 'What you copied'),
 ];
 const deviceRows = [
+  Row('device-guess', 'Odhad zařízení', 'Best-guess device'),
   Row('os', 'Systém', 'OS'),
-  Row('platform', 'Platforma', 'Platform'),
+  Row('battery', 'Baterie', 'Battery'),
   Row('cores', 'Jádra CPU', 'CPU cores'),
   Row('ram', 'Paměť (min.)', 'Memory (min.)'),
-  Row('touch', 'Dotykové body', 'Touch points'),
-  Row('screen', 'Obrazovka', 'Screen'),
-  Row('viewport', 'Okno', 'Viewport'),
-  Row('dpr', 'Pixel ratio', 'Pixel ratio'),
-  Row('depth', 'Barevná hloubka', 'Color depth'),
   Row('gpu', 'Grafika (GPU)', 'Graphics (GPU)'),
-  Row('device-guess', 'Odhad zařízení', 'Best-guess device'),
+  Row('screen', 'Obrazovka', 'Screen'),
+  Row('monitors', 'Monitory', 'Monitors'),
   Row('media-cam', 'Připojené kamery', 'Cameras attached'),
   Row('media-mic', 'Připojené mikrofony', 'Mics attached'),
+  Row('platform', 'Platforma', 'Platform', true),
+  Row('touch', 'Dotykové body', 'Touch points', true),
+  Row('viewport', 'Okno', 'Viewport', true),
+  Row('dpr', 'Pixel ratio', 'Pixel ratio', true),
+  Row('depth', 'Barevná hloubka', 'Color depth', true),
 ];
 const browserRows = [
   Row('browser', 'Prohlížeč', 'Browser'),
-  Row('engine', 'Jádro', 'Engine'),
+  Row('incognito', 'Anonymní okno', 'Incognito window'),
   Row('langs', 'Jazyky', 'Languages'),
   Row('tz', 'Časové pásmo', 'Time zone'),
   Row('localtime', 'Tvůj čas', 'Your time'),
-  Row('locale', 'Formát čísel', 'Number format'),
+  Row('prefs', 'Tvoje nastavení', 'Your settings'),
   Row('dnt', 'Do Not Track', 'Do Not Track'),
-  Row('cookies', 'Cookies', 'Cookies'),
-  Row('ua', 'User-Agent', 'User-Agent'),
+  Row('engine', 'Jádro', 'Engine', true),
+  Row('locale', 'Formát čísel', 'Number format', true),
+  Row('cookies', 'Cookies', 'Cookies', true),
+  Row('ua', 'User-Agent', 'User-Agent', true),
 ];
 const fpRows = [
   Row('fp-canvas', 'Canvas otisk', 'Canvas hash'),
@@ -312,6 +322,89 @@ const fpRows = [
   .ds-track-val { font-family: var(--mono); font-size: clamp(22px, 5vw, 34px); font-weight: 800;
     color: var(--danger); margin: 8px 0 6px; }
   .ds-track-note { color: var(--ink-dim); font-size: 13px; line-height: 1.55; max-width: 52ch; margin: 0 auto; }
+
+  /* ---------- HERO fakta (velká personalizace hned na první obrazovce) ---------- */
+  .hero-facts {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 12px;
+    max-width: 780px; margin: 26px auto 0; min-height: 1px;
+  }
+  .fact {
+    font-family: var(--mono); font-size: clamp(15px, 2.3vw, 21px); font-weight: 600;
+    color: var(--ink); padding: 8px 14px; border-radius: 999px;
+    border: 1px solid rgba(255,92,108,0.35); background: rgba(255,92,108,0.07);
+    opacity: 0; transform: translateY(8px); animation: factIn .5s ease forwards;
+  }
+  .fact .fi { filter: saturate(0.9); margin-right: 6px; }
+  .hero-facts.static .fact { animation: none; opacity: 1; transform: none; }
+  @keyframes factIn { to { opacity: 1; transform: none; } }
+
+  /* ---------- "co z toho plyne" ---------- */
+  .sowhat {
+    margin: 0; padding: 16px 24px 18px 22px; font-size: 14.5px; line-height: 1.6;
+    color: var(--ink); border-top: 1px solid var(--panel-border);
+    border-left: 3px solid var(--danger); background: rgba(255,92,108,0.045);
+  }
+  .sowhat::before { content: "→ "; color: var(--danger); font-weight: 700; }
+
+  /* ---------- technické detaily (rozbalovací) ---------- */
+  details.tech { border-top: 1px solid rgba(255,255,255,0.045); }
+  details.tech summary {
+    cursor: pointer; list-style: none; padding: 11px 24px; font-family: var(--mono);
+    font-size: 12px; letter-spacing: .06em; color: var(--ink-faint);
+  }
+  details.tech summary::-webkit-details-marker { display: none; }
+  details.tech summary::after { content: " ▾"; }
+  details.tech[open] summary::after { content: " ▴"; }
+  details.tech summary:hover { color: var(--accent); }
+
+  /* ---------- heatmapa kurzoru ---------- */
+  .heat-wrap { padding: 6px 24px 20px; }
+  .heat-wrap .geo-cap { justify-content: center; text-align: center; }
+  #heat { width: 100%; max-width: 560px; margin: 0 auto; height: auto; display: block; border-radius: 12px;
+    border: 1px solid var(--panel-border); background: #05070a; }
+
+  /* ---------- kamera: náhled + zmrazený snímek ---------- */
+  .cam-box { position: relative; margin-top: 16px; border-radius: 14px; overflow: hidden;
+    border: 1px solid rgba(255,92,108,0.4); background: #000; max-width: 480px; }
+  .cam-box video, .cam-box canvas { display: block; width: 100%; height: auto; transform: scaleX(-1); }
+  .cam-tag { position: absolute; top: 10px; left: 12px; font-family: var(--mono); font-size: 12px;
+    color: #fff; text-shadow: 0 0 6px #000; }
+  .cam-cap { padding: 10px 14px; font-family: var(--mono); font-size: 12.5px; color: var(--danger);
+    background: rgba(7,8,9,0.85); line-height: 1.5; }
+  .perm:disabled { cursor: progress; opacity: .7; }
+
+  /* ---------- retro → dnes ---------- */
+  .retro .rnow { font-family: var(--mono); font-size: 11.5px; color: var(--amber); margin-top: 8px; line-height: 1.45; }
+
+  /* ---------- spis: hlášení ---------- */
+  /* .dossier prefix: jinak by vyhrálo obecné `.outro p` (max-width, margin auto) */
+  .dossier .ds-story { margin: 0; max-width: none; padding: 16px 20px; font-size: 14.5px; line-height: 1.7;
+    color: var(--ink); border-bottom: 1px solid rgba(255,92,108,0.2); }
+  .ds-story b { color: var(--danger); font-weight: 700; }
+
+  /* ---------- co s tím ---------- */
+  .defend { width: min(880px, 100%); margin: 56px auto 10px; text-align: left;
+    opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+  .defend.in { opacity: 1; transform: none; }
+  .defend .section-label { text-align: center; }
+  .defend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .tip { border: 1px solid rgba(56,232,200,0.22); border-radius: 14px; padding: 16px; background: rgba(56,232,200,0.035); }
+  .tip .tt { font-weight: 700; font-size: 14.5px; margin-bottom: 6px; color: var(--ink); }
+  .tip .td { font-size: 13px; color: var(--ink-dim); line-height: 1.55; }
+
+  /* ---------- sdílení + toast ---------- */
+  .share { margin: 30px auto 0; }
+  #share-btn { font: inherit; font-size: 14px; font-weight: 600; color: var(--bg); background: var(--accent);
+    border: none; border-radius: 999px; padding: 12px 22px; cursor: pointer; box-shadow: 0 0 26px rgba(56,232,200,0.25); }
+  #share-btn:hover { filter: brightness(1.08); }
+  .share-note { margin-top: 10px; min-height: 1.2em; font-family: var(--mono); font-size: 12.5px; color: var(--accent); }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 20px); z-index: 60;
+    max-width: min(560px, calc(100vw - 32px)); padding: 12px 18px; border-radius: 14px;
+    background: rgba(13,15,18,0.96); border: 1px solid rgba(255,92,108,0.45); color: var(--ink);
+    font-size: 14px; line-height: 1.5; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    opacity: 0; transition: opacity .3s, transform .3s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast b { color: var(--danger); }
 </style>
 
 <main>
@@ -336,6 +429,7 @@ const fpRows = [
       <span class="en">Think you're here <span class="hl">anonymously?</span></span>
     </h1>
     <p class="scanline" id="scanline"><span class="cursor">&nbsp;</span></p>
+    <div class="hero-facts" id="hero-facts" aria-live="polite"></div>
     <div class="scrollcue" id="scrollcue">
       <span class="cs">scrolluj — uvidíš, co o tobě vím</span>
       <span class="en">scroll — see what I know about you</span>
@@ -350,14 +444,7 @@ const fpRows = [
       <h2 class="panel-title"><span class="cs">Síť</span><span class="en">Network</span></h2>
       <span class="panel-sub"><span class="cs">co vidí server</span><span class="en">what the server sees</span></span>
     </div>
-    <div class="rows">
-      {netRows.map((r) => (
-        <div class="row">
-          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
-          <span class="v pending" id={`v-${r.id}`}>…</span>
-        </div>
-      ))}
-    </div>
+    <Rows rows={netRows} />
     <div class="geo-wrap" id="geo-wrap" hidden>
       <div class="geo-stack">
         <iframe id="geo-map-frame" title="map" loading="lazy" referrerpolicy="no-referrer"></iframe>
@@ -371,6 +458,10 @@ const fpRows = [
         </a>
       </div>
     </div>
+    <p class="sowhat" id="sw-net">
+      <span class="cs">Z IP vím město a operátora. A operátor ví přesně, komu tahle IP právě patří — jméno i adresu.</span>
+      <span class="en">From your IP I get your city and ISP. And your ISP knows exactly who this IP belongs to right now — name and address.</span>
+    </p>
   </div></div></section>
 
   <!-- ============ 02 · ZAŘÍZENÍ ============ -->
@@ -380,14 +471,11 @@ const fpRows = [
       <h2 class="panel-title"><span class="cs">Zařízení</span><span class="en">Device</span></h2>
       <span class="panel-sub"><span class="cs">tvůj hardware</span><span class="en">your hardware</span></span>
     </div>
-    <div class="rows">
-      {deviceRows.map((r) => (
-        <div class="row">
-          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
-          <span class="v pending" id={`v-${r.id}`}>…</span>
-        </div>
-      ))}
-    </div>
+    <Rows rows={deviceRows} />
+    <p class="sowhat">
+      <span class="cs">Podle hardwaru odhadnu, co máš za zařízení a kolik zhruba stálo. Tohle se opravdu používá: cestovní web Orbitz ukazoval majitelům Maců dražší hotely.</span>
+      <span class="en">From your hardware I can guess your device and roughly what it cost. This is used for real: travel site Orbitz showed Mac users pricier hotels.</span>
+    </p>
   </div></div></section>
 
   <!-- ============ 03 · PROHLÍŽEČ ============ -->
@@ -397,14 +485,11 @@ const fpRows = [
       <h2 class="panel-title"><span class="cs">Prohlížeč</span><span class="en">Browser</span></h2>
       <span class="panel-sub"><span class="cs">software a nastavení</span><span class="en">software & settings</span></span>
     </div>
-    <div class="rows">
-      {browserRows.map((r) => (
-        <div class="row">
-          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
-          <span class="v pending" id={`v-${r.id}`}>…</span>
-        </div>
-      ))}
-    </div>
+    <Rows rows={browserRows} />
+    <p class="sowhat">
+      <span class="cs">Jazyk, časové pásmo a nastavení prozradí, odkud jsi a jak žiješ — ať IP tvrdí cokoli. A Do Not Track? Většina webů ho prostě ignoruje.</span>
+      <span class="en">Language, time zone and settings reveal where you're from and how you live — whatever your IP says. And Do Not Track? Most sites simply ignore it.</span>
+    </p>
   </div></div></section>
 
   <!-- ============ 04 · OTISK ============ -->
@@ -424,14 +509,7 @@ const fpRows = [
         <b>almost-unique fingerprint</b> that recognizes you even in incognito.</span>
       </p>
     </div>
-    <div class="rows">
-      {fpRows.map((r) => (
-        <div class="row">
-          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
-          <span class="v pending" id={`v-${r.id}`}>…</span>
-        </div>
-      ))}
-    </div>
+    <Rows rows={fpRows} />
     <div style="padding: 20px 24px 24px;">
       <div class="fp-bar"><i id="fp-progress"></i></div>
       <div class="fp-verdict">
@@ -467,6 +545,10 @@ const fpRows = [
         </p>
       </div>
     </div>
+    <p class="sowhat">
+      <span class="cs">Smazání cookies ani anonymní okno nepomůžou: otisk se spočítá znovu a vyjde stejně. Používají ho reklamní sítě i antifraud systémy bank.</span>
+      <span class="en">Clearing cookies or going incognito won't help: the fingerprint is simply recomputed — and comes out the same. Ad networks and banks' anti-fraud systems use it.</span>
+    </p>
   </div></div></section>
 
   <!-- ============ 05 · PŮVOD ============ -->
@@ -484,14 +566,7 @@ const fpRows = [
         there's little room for doubt — <b>each row votes for one country</b>.</span>
       </p>
     </div>
-    <div class="rows">
-      {originRows.map((r) => (
-        <div class="row">
-          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
-          <span class="v pending" id={`v-${r.id}`}>…</span>
-        </div>
-      ))}
-    </div>
+    <Rows rows={originRows} />
     <div style="padding: 20px 24px 24px;">
       <div class="fp-verdict" style="border-color: rgba(56,232,200,0.3); background: rgba(56,232,200,0.06);">
         <div class="fp-id" id="origin-verdict" style="color: var(--accent);">· · ·</div>
@@ -501,6 +576,10 @@ const fpRows = [
         </p>
       </div>
     </div>
+    <p class="sowhat">
+      <span class="cs">VPN změní jen jeden hlas z mnoha. Hodiny, jazyk a klávesnice tě prozradí dál.</span>
+      <span class="en">A VPN changes just one vote out of many. Your clock, language and keyboard still give you away.</span>
+    </p>
   </div></div></section>
 
   <!-- ============ 06 · CHOVÁNÍ ============ -->
@@ -518,14 +597,18 @@ const fpRows = [
         every click, even <b>when you switched to another window</b>.</span>
       </p>
     </div>
-    <div class="rows">
-      {behaviorRows.map((r) => (
-        <div class="row">
-          <span class="k"><span class="cs">{r.kCs}</span><span class="en">{r.kEn}</span></span>
-          <span class="v pending" id={`v-${r.id}`}>…</span>
-        </div>
-      ))}
+    <Rows rows={behaviorRows} />
+    <div class="heat-wrap">
+      <canvas id="heat" width="760" height="300" aria-label="mouse heatmap"></canvas>
+      <div class="geo-cap"><span>
+        <span class="cs">Tvůj kurzor v tomhle okně (zmenšeno) — kde ses zdržel a kam jsi klikl.</span>
+        <span class="en">Your cursor in this window (scaled down) — where you lingered and where you clicked.</span>
+      </span></div>
     </div>
+    <p class="sowhat">
+      <span class="cs">Nástroje na „nahrávání relací" (Hotjar, Microsoft Clarity…) tohle ukládají na spoustě běžných webů — i s tím, kde ses zarazil a co jsi vyplnil a zase smazal.</span>
+      <span class="en">"Session replay" tools (Hotjar, Microsoft Clarity…) record exactly this on plenty of ordinary sites — including where you hesitated and what you typed and deleted.</span>
+    </p>
   </div></div></section>
 
   <!-- ============ 07 · SVOLENÍ ============ -->
@@ -552,7 +635,7 @@ const fpRows = [
         <button class="perm" id="perm-cam">
           <div class="pi">📷</div>
           <div class="pt"><span class="cs">Kamera</span><span class="en">Camera</span></div>
-          <div class="pd"><span class="cs">Kolik kamer máš a co vidí</span><span class="en">How many cameras, and the view</span></div>
+          <div class="pd"><span class="cs">Co tvoje kamera právě vidí</span><span class="en">What your camera sees right now</span></div>
           <div class="pr" id="pr-cam"></div>
         </button>
         <button class="perm" id="perm-mic">
@@ -561,12 +644,14 @@ const fpRows = [
           <div class="pd"><span class="cs">Hladina zvuku v reálném čase</span><span class="en">Live audio level</span></div>
           <div class="pr" id="pr-mic"></div>
         </button>
-        <button class="perm" id="perm-battery">
-          <div class="pi">🔋</div>
-          <div class="pt"><span class="cs">Baterie</span><span class="en">Battery</span></div>
-          <div class="pd"><span class="cs">Stav nabití i bez svolení</span><span class="en">Charge level, no prompt</span></div>
-          <div class="pr" id="pr-battery"></div>
-        </button>
+      </div>
+      <div class="cam-box" id="cam-box" hidden>
+        <video id="cam-video" playsinline muted></video>
+        <canvas id="cam-still" hidden></canvas>
+        <div class="cam-tag"><span class="ds-rec">● REC</span> <span id="cam-count"></span></div>
+        <div class="cam-cap" id="cam-cap">
+          <span class="cs">Tohle vidím já.</span><span class="en">This is what I see.</span>
+        </div>
       </div>
 
       <div id="geo-precise" hidden>
@@ -586,21 +671,21 @@ const fpRows = [
   <section class="panel"><div class="wrap"><div class="panel-card" data-panel>
     <div class="panel-head">
       <span class="panel-num">08</span>
-      <h2 class="panel-title"><span class="cs">Kdysi to bylo horší</span><span class="en">It used to be worse</span></h2>
-      <span class="panel-sub"><span class="cs">co weby viděly dřív</span><span class="en">what sites saw before</span></span>
+      <h2 class="panel-title"><span class="cs">Pluginy umřely. Sledování ne.</span><span class="en">Plugins died. Tracking didn't.</span></h2>
+      <span class="panel-sub"><span class="cs">jen se přestěhovalo</span><span class="en">it just moved</span></span>
     </div>
     <div style="padding: 22px 24px;">
       <p class="lead">
-        <span class="cs">Dnes prohlížeč hodně schovává. Ještě před pár lety měly weby
-        přes pluginy přístup hluboko do systému:</span>
-        <span class="en">Browsers hide a lot today. A few years ago, plugins gave sites
-        deep access into your system:</span>
+        <span class="cs">Kdysi měly weby přes pluginy přístup hluboko do systému. Ty jsou pryč —
+        <b>sledování ale jen změnilo adresu</b>. Všechno, co jsi viděl nahoře, je jejich náhrada:</span>
+        <span class="en">Plugins once gave sites deep access into your system. They're gone —
+        <b>tracking just changed address</b>. Everything you saw above is what replaced them:</span>
       </p>
       <div class="retro-grid">
-        <div class="retro"><div class="rn">Flash</div><div class="rs">† 2020</div><div class="rd"><span class="cs">„Super-cookies", systémové info, mikrofon.</span><span class="en">"Super-cookies", system info, microphone.</span></div></div>
-        <div class="retro"><div class="rn">ActiveX</div><div class="rs">† 2022</div><div class="rd"><span class="cs">Jen v IE, plný přístup k Windows. Noční můra.</span><span class="en">IE only, full Windows access. A nightmare.</span></div></div>
-        <div class="retro"><div class="rn">Java applety</div><div class="rs">† 2017</div><div class="rd"><span class="cs">Běh kódu mimo sandbox prohlížeče.</span><span class="en">Code running outside the browser sandbox.</span></div></div>
-        <div class="retro"><div class="rn">Silverlight</div><div class="rs">† 2021</div><div class="rd"><span class="cs">Vlastní runtime, DRM, info o stroji.</span><span class="en">Own runtime, DRM, machine info.</span></div></div>
+        <div class="retro"><div class="rn">Flash</div><div class="rs">† 2020</div><div class="rd"><span class="cs">„Super-cookies", které přežily smazání cookies.</span><span class="en">"Super-cookies" that survived a cookie wipe.</span></div><div class="rnow"><span class="cs">→ dnes: ETag v cache (panel 04)</span><span class="en">→ today: ETag in cache (panel 04)</span></div></div>
+        <div class="retro"><div class="rn">ActiveX</div><div class="rs">† 2022</div><div class="rd"><span class="cs">Hardware a systém přímo z Windows.</span><span class="en">Hardware and system info straight from Windows.</span></div><div class="rnow"><span class="cs">→ dnes: GPU přes WebGL, client hints</span><span class="en">→ today: GPU via WebGL, client hints</span></div></div>
+        <div class="retro"><div class="rn">Java applety</div><div class="rs">† 2017</div><div class="rd"><span class="cs">Seznam fontů a přesné info o stroji.</span><span class="en">Font lists and exact machine details.</span></div><div class="rnow"><span class="cs">→ dnes: detekce fontů, canvas otisk</span><span class="en">→ today: font probing, canvas fingerprint</span></div></div>
+        <div class="retro"><div class="rn">Silverlight</div><div class="rs">† 2021</div><div class="rd"><span class="cs">Vlastní runtime s vlastním úložištěm.</span><span class="en">Its own runtime with its own storage.</span></div><div class="rnow"><span class="cs">→ dnes: audio otisk, WebRTC</span><span class="en">→ today: audio fingerprint, WebRTC</span></div></div>
       </div>
     </div>
   </div></div></section>
@@ -619,6 +704,7 @@ const fpRows = [
         <span class="ds-title"><span class="cs">SLOŽKA SUBJEKTU</span><span class="en">SUBJECT FILE</span></span>
         <span class="ds-code" id="ds-code">#········</span>
       </div>
+      <p class="ds-story" id="ds-story">…</p>
       <div class="dossier-grid">
         <div class="ds-row"><span class="ds-k"><span class="cs">Poloha</span><span class="en">Location</span></span><span class="ds-v" id="ds-loc">…</span></div>
         <div class="ds-row"><span class="ds-k"><span class="cs">IP</span><span class="en">IP</span></span><span class="ds-v" id="ds-ip">…</span></div>
@@ -640,6 +726,30 @@ const fpRows = [
       <span class="en">Every site you visit sees exactly this — and usually ties it to your
       fingerprint across visits. It's not a bug. It's how the web is built.</span>
     </p>
+    <div class="defend" data-panel>
+      <span class="section-label"><span class="cs">co s tím?</span><span class="en">what can you do?</span></span>
+      <div class="defend-grid">
+        <div class="tip"><div class="tt"><span class="cs">VPN skryje IP. Ne tebe.</span><span class="en">A VPN hides your IP. Not you.</span></div>
+          <div class="td"><span class="cs">Změní jen řádek „IP" a „Město". Otisk, jazyk, hodiny i klávesnice zůstanou.</span><span class="en">It only changes the "IP" and "City" rows. Fingerprint, language, clock and keyboard stay.</span></div></div>
+        <div class="tip"><div class="tt"><span class="cs">Prohlížeč, který se brání</span><span class="en">A browser that fights back</span></div>
+          <div class="td"><span class="cs">Firefox (režim Přísný), Brave (náhodný otisk) nebo Safari. Chrome se nebrání skoro vůbec.</span><span class="en">Firefox (Strict mode), Brave (randomised fingerprint) or Safari. Chrome barely fights back.</span></div></div>
+        <div class="tip"><div class="tt"><span class="cs">Blokuj trackery</span><span class="en">Block trackers</span></div>
+          <div class="td"><span class="cs">uBlock Origin zastaví většinu reklamních a měřicích skriptů dřív, než si tě spočítají.</span><span class="en">uBlock Origin stops most ad and analytics scripts before they can profile you.</span></div></div>
+        <div class="tip"><div class="tt"><span class="cs">Anonymní okno ≠ anonymita</span><span class="en">Incognito ≠ anonymous</span></div>
+          <div class="td"><span class="cs">Jen po sobě smaže historii u tebe. Webům se neschováš.</span><span class="en">It only wipes your local history. Sites still see you.</span></div></div>
+        <div class="tip"><div class="tt"><span class="cs">Svolení dávej střídmě</span><span class="en">Grant permissions sparingly</span></div>
+          <div class="td"><span class="cs">Poloha, kamera, mikrofon: povolené jednou, platí často napořád. Projdi si je v nastavení.</span><span class="en">Location, camera, mic: granted once, often kept forever. Review them in settings.</span></div></div>
+        <div class="tip"><div class="tt"><span class="cs">Chceš opravdu zmizet?</span><span class="en">Really want to vanish?</span></div>
+          <div class="td"><span class="cs">Tor Browser: všichni uživatelé vypadají stejně. Pomalejší, ale otisk nemáš.</span><span class="en">Tor Browser: every user looks the same. Slower, but no fingerprint.</span></div></div>
+      </div>
+    </div>
+    <div class="share">
+      <button id="share-btn" type="button">
+        <span class="cs">📤 Pošli to někomu, kdo si myslí, že je na webu anonymní</span>
+        <span class="en">📤 Send this to someone who thinks they're anonymous online</span>
+      </button>
+      <div class="share-note" id="share-note" aria-live="polite"></div>
+    </div>
     <div class="privacy">
       🔒 <span class="cs">igy.cz si nic neukládá — server jen přečte, co mu prohlížeč sám pošle. Žádná databáze, žádné cookies.</span>
       <span class="en">igy.cz stores nothing — the server only reads what your browser sends it. No database, no cookies.</span>
@@ -662,7 +772,8 @@ const fpRows = [
   // Uložený "surový" stav, aby šlo vše přerenderovat při přepnutí jazyka
   // (jinak by JS-doplňované hodnoty zůstaly v původním jazyce).
   var S = { whoami:null, hero:null, device:false, browser:false, webrtc:null,
-            fp:null, sc:null, adblockOn:null, adblockRegion:null, originReady:false };
+            fp:null, sc:null, adblockOn:null, adblockRegion:null, originReady:false,
+            battery:null, kbd:null, incognito:undefined, copied:null };
 
   // --- helper pro vyplnění řádků (reset tříd → korektní i při re-renderu) ---
   function set(id, val, cls){
@@ -671,6 +782,92 @@ const fpRows = [
     el.classList.remove('pending', 'hot', 'danger');
     if (cls) el.classList.add(cls);
     el.textContent = (val === null || val === undefined || val === '') ? '—' : val;
+  }
+  function mm(q){ try { return window.matchMedia && matchMedia(q).matches; } catch(e){ return false; } }
+  // "před 3 dny" / "3 days ago" (čeština: 7. pád — minutou/minutami, dnem/dny…)
+  function relTime(ms){
+    var s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+    var u = s < 3600 ? [Math.max(1, Math.round(s/60)), ['minutou','minutami'], ['minute','minutes']]
+          : s < 86400 ? [Math.round(s/3600), ['hodinou','hodinami'], ['hour','hours']]
+          : [Math.round(s/86400), ['dnem','dny'], ['day','days']];
+    var n = u[0];
+    return tr('před ' + (n === 1 ? u[1][0] : n + ' ' + u[1][1]), n + ' ' + (n === 1 ? u[2][0] : u[2][1]) + ' ago');
+  }
+  function langName(code){
+    try { return new Intl.DisplayNames([T()], { type: 'language' }).of(code) || code; } catch(e){ return code; }
+  }
+  // Pozdě dorazivší data (baterie, klávesnice, návštěvy…) → překresli, co je už vidět.
+  function onLate(){
+    if (S.device) renderDevice();
+    if (S.browser) renderBrowser();
+    if (S.originReady) renderOrigin();
+    if (heroDone && !heroTyping) renderHeroFacts();
+    if (S.dossierReady) renderDossier();
+  }
+
+  // ===================== sběr hned po načtení (hero + spis) =====================
+  // Baterie — Chromium ji dává bez jakéhokoli svolení (Safari/Firefox ji zrušily).
+  function collectBattery(){
+    if (!navigator.getBattery){ S.battery = { unsupported: true }; return; }
+    navigator.getBattery().then(function(b){
+      function upd(){
+        var lvl = (b && typeof b.level === 'number') ? b.level : NaN;
+        S.battery = isNaN(lvl) ? { unknown: true }
+          : { level: Math.round(lvl * 100), charging: !!b.charging,
+              // 100 % v zásuvce bez odhadu vybíjení = nejspíš stolní PC
+              plugged: lvl >= 1 && b.charging && !isFinite(b.dischargingTime) };
+        onLate();
+      }
+      upd();
+      if (b.addEventListener){ b.addEventListener('levelchange', upd); b.addEventListener('chargingchange', upd); }
+    }).catch(function(){ S.battery = { unknown: true }; onLate(); });
+  }
+  function batteryText(){
+    var b = S.battery;
+    if (!b) return tr('zjišťuji…', 'checking…');
+    if (b.unsupported) return tr('skryto (Safari/Firefox ji nedávají)', 'hidden (Safari/Firefox don\'t expose it)');
+    if (b.unknown) return tr('nešlo přečíst', 'couldn\'t read it');
+    if (b.plugged) return tr('100 % · v zásuvce (nebo stolní PC)', '100% · plugged in (or a desktop)');
+    return b.level + ' %' + (b.charging ? tr(' · nabíjí se', ' · charging') : tr(' · jedeš z baterie', ' · on battery'));
+  }
+
+  // Rozložení klávesnice (Chromium, bez svolení) — silný národní signál:
+  // "prohlížeč máš anglicky, ale píšeš na české klávesnici".
+  function collectKeyboard(){
+    var kb = navigator.keyboard;
+    if (!kb || !kb.getLayoutMap){ S.kbd = { unsupported: true }; return; }
+    kb.getLayoutMap().then(function(m){
+      var q = m.get('KeyQ'), y = m.get('KeyY'), d2 = m.get('Digit2'), sc = m.get('Semicolon');
+      var layout = q === 'a' ? 'AZERTY' : (y === 'z' ? 'QWERTZ' : 'QWERTY'), cc = null;
+      if (d2 === 'ě') cc = 'CZ';
+      else if (d2 === 'ľ') cc = 'SK';
+      else if (layout === 'AZERTY') cc = 'FR';
+      else if (layout === 'QWERTZ' && sc === 'ö') cc = 'DE';
+      else if (sc === 'ñ') cc = 'ES';
+      else if (sc === 'ò') cc = 'IT';
+      else if (sc === 'ç') cc = 'PT';
+      S.kbd = { layout: layout, cc: cc };
+      onLate();
+    }).catch(function(){ S.kbd = { unsupported: true }; onLate(); });
+  }
+
+  // Anonymní okno — heuristika (stejný princip jako knihovna detectIncognito):
+  // Safari a Firefox v privátním okně odmítnou Origin Private File System.
+  // Chromium dřív prozrazoval incognito menší kvótou úložiště; dnes hlásí
+  // všude stejnou (ověřeno: 10 GiB v běžném i anonymním okně) → poctivě "nepoznám".
+  function collectIncognito(){
+    function done(v){ S.incognito = v; onLate(); }
+    try {
+      if (!!navigator.userAgentData || /Chrome\//.test(navigator.userAgent)){ done('chromium'); return; }
+      if (navigator.storage && navigator.storage.getDirectory){
+        navigator.storage.getDirectory().then(function(){ done(false); }).catch(function(e){
+          var m = String((e && e.name) || '') + ' ' + String((e && e.message) || '');
+          done(/unknown transient reason|SecurityError|security error/i.test(m) ? true : null);
+        });
+        return;
+      }
+    } catch(e){}
+    done(null);
   }
 
   // ===================== 01 · SÍŤ (server) =====================
@@ -693,9 +890,10 @@ const fpRows = [
     var d = S.whoami;
     if (d == null) return;          // ještě neproběhlo → řádky zůstávají "…"
     if (d === false){
-      ['ip','ipver','city','region','country','isp','colo','proto','tls','rtt'].forEach(function(id){
+      ['ip','ipver','city','region','country','isp','vpn','colo','proto','tls','rtt'].forEach(function(id){
         set(id, tr('(jen na nasazeném webu)', '(only on deployed site)'));
       });
+      renderConn();
       return;
     }
     set('ip', d.ip, 'hot');
@@ -709,7 +907,61 @@ const fpRows = [
     set('proto', d.network.httpProtocol);
     set('tls', d.tls.version ? (d.tls.version + (d.tls.cipher ? '  ·  ' + d.tls.cipher : '')) : null);
     set('rtt', (d.tls.clientTcpRtt != null) ? (d.tls.clientTcpRtt + ' ms') : null);
+    renderConn();
+    renderVPN();
     renderGeoMap();
+  }
+
+  // --- VPN / proxy: IP patří VPN/datacentru? A jdou hodiny prohlížeče jinak než IP? ---
+  var VPN_RE = /(nord|proton|mullvad|express ?vpn|surfshark|cyberghost|private internet access|windscribe|ipvanish|hide\.me|purevpn|m247|datacamp|cdn77|leaseweb|ovh|hetzner|digitalocean|amazon|google cloud|microsoft|azure|linode|akamai|vultr|choopa|contabo|scaleway|oracle|alibaba|tencent|zscaler|cloudflare|fastly|clouvider|packethub)/i;
+  function tzOffsetName(tz){
+    try {
+      var parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' }).formatToParts(new Date());
+      for (var i = 0; i < parts.length; i++) if (parts[i].type === 'timeZoneName') return parts[i].value;
+    } catch(e){}
+    return null;
+  }
+  function vpnInfo(){
+    var d = S.whoami; if (!d || d === false) return null;
+    var org = (d.network && d.network.asOrganization) || '';
+    var btz = null; try { btz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(e){}
+    var itz = (d.geo && d.geo.timezone) || null;
+    // Europe/Prague vs Europe/Bratislava není nesoulad → porovnáváme posun, ne jméno.
+    var mismatch = !!(btz && itz && btz !== itz && tzOffsetName(btz) !== tzOffsetName(itz));
+    return { hosting: VPN_RE.test(org), org: org, mismatch: mismatch, btz: btz, itz: itz };
+  }
+  function renderVPN(){
+    var v = vpnInfo(); if (!v) return;
+    var d = S.whoami, isp = (d.network && d.network.asOrganization) || tr('tvůj operátor', 'your ISP');
+    var sw = document.getElementById('sw-net');
+    if (v.hosting && v.mismatch){
+      set('vpn', tr('ANO (' + v.org + ') — ale hodiny tě prozrazují', 'YES (' + v.org + ') — but your clock gives you away'), 'danger');
+      if (sw) sw.textContent = tr('Schováváš se za ' + v.org + '. Jenže tvoje hodiny jdou podle ' + v.btz + ', ne podle ' + v.itz + ' — vím, že nejsi tam, kde tvrdí IP.',
+        'You\'re hiding behind ' + v.org + '. But your clock runs on ' + v.btz + ', not ' + v.itz + ' — I know you\'re not where your IP says.');
+    } else if (v.hosting){
+      set('vpn', tr('vypadá to na VPN / datacentrum (' + v.org + ')', 'looks like a VPN / datacenter (' + v.org + ')'), 'hot');
+      if (sw) sw.textContent = tr('IP patří ' + v.org + ' — VPN nebo datacentru. Tu jsi schoval. Otisk, jazyk a klávesnici níž ale ne.',
+        'This IP belongs to ' + v.org + ' — a VPN or datacenter. You hid that. Not your fingerprint, language or keyboard below.');
+    } else if (v.mismatch){
+      set('vpn', tr('IP je jinde než tvoje hodiny — VPN nebo proxy?', 'your IP and your clock disagree — VPN or proxy?'), 'hot');
+      if (sw) sw.textContent = tr('IP tvrdí ' + v.itz + ', tvoje hodiny ' + v.btz + '. Buď cestuješ, nebo něco schováváš.',
+        'Your IP says ' + v.itz + ', your clock says ' + v.btz + '. Either you\'re travelling, or you\'re hiding something.');
+    } else {
+      set('vpn', tr('ne — připojuješ se napřímo', 'no — you connect directly'));
+      if (sw) sw.textContent = tr('Z IP vím město a operátora. A ' + isp + ' ví přesně, komu tahle IP právě patří — jméno i adresu.',
+        'From your IP I get your city and ISP. And ' + isp + ' knows exactly who this IP belongs to right now — name and address.');
+    }
+  }
+  function renderConn(){
+    var c = navigator.connection;
+    if (!c){ set('conn', tr('skryto (jen Chrome/Android)', 'hidden (Chrome/Android only)')); return; }
+    var TYPE = { wifi: 'Wi-Fi', cellular: tr('mobilní data', 'mobile data'), ethernet: tr('kabel', 'cable') };
+    var bits = [];
+    if (c.type && TYPE[c.type]) bits.push(TYPE[c.type]);
+    if (c.effectiveType) bits.push(c.effectiveType);
+    if (c.downlink) bits.push('~' + c.downlink + ' Mb/s');
+    if (c.saveData) bits.push(tr('šetříš data', 'data saver'));
+    set('conn', bits.join('  ·  ') || null);
   }
 
   // OpenStreetMap helpers (reálná mapa jako podklad + proklik).
@@ -845,25 +1097,41 @@ const fpRows = [
 
   function heroPlace(){ var h = S.hero || {}; return h.city || (h.cn ? h.cn[T()] : ''); }
   function heroLines(){
-    var place = heroPlace(), isp = (S.hero && S.hero.isp) || '';
-    if (place || isp){
-      return [
-        tr('> navazuji spojení…', '> establishing connection…'),
-        tr('> mám tě.', '> got you.'),
-        (place ? tr('Píšeš z místa: ', 'You\'re writing from: ') + place : '') +
-        (isp ? (place ? ',  ' : '') + tr('přes ', 'via ') + isp : '') + '.',
-      ].filter(Boolean);
-    }
     return [ tr('> navazuji spojení…', '> establishing connection…'),
-             tr('> čtu, co mi prohlížeč prozradí…', '> reading what your browser reveals…') ];
+             tr('> mám tě.', '> got you.'),
+             tr('> tohle vím, aniž jsi cokoli udělal:', '> here\'s what I know — and you did nothing:') ];
   }
   function showCue(){ var c = document.getElementById('scrollcue'); if (c) c.classList.add('show'); }
   function renderHeroFinal(){
-    var place = heroPlace(), isp = (S.hero && S.hero.isp) || '';
-    var html = heroLines().map(esc).join('<br>');
-    if (place) html = html.replace(esc(place), '<b>' + esc(place) + '</b>');
-    if (isp)   html = html.replace(esc(isp), '<b>' + esc(isp) + '</b>');
-    scanEl.innerHTML = html;
+    scanEl.innerHTML = heroLines().map(esc).join('<br>');
+    renderHeroFacts();
+  }
+  // Velká personalizace hned na první obrazovce — většina lidí dál nescrolluje.
+  var heroFactsKey = '';
+  function heroFacts(){
+    var f = [], h = S.hero || {}, place = heroPlace(), v = vpnInfo();
+    if (place) f.push(['📍', place]);
+    if (v && v.hosting) f.push(['🛡️', 'VPN · ' + v.org]);
+    else if (h.isp) f.push(['📡', h.isp]);
+    var gd = guessDevice();
+    f.push([/iPhone|Android|iPad/.test((gd && gd.name) || navigator.userAgent) ? '📱' : '💻', gd ? gd.name : guessOS()]);
+    f.push(['🕘', new Date().toLocaleTimeString(T() === 'en' ? 'en-GB' : 'cs-CZ', { hour: '2-digit', minute: '2-digit' })]);
+    var b = S.battery;
+    if (b && b.level != null && !b.plugged) f.push(['🔋', b.level + ' %' + (b.charging ? tr(' · nabíjíš', ' · charging') : '')]);
+    if (S.sc && S.sc.visits > 1) f.push(['🔁', tr(S.sc.visits + '. návštěva', 'visit #' + S.sc.visits)]);
+    if (S.incognito === true) f.push(['🕶️', tr('anonymní okno — nepomůže', 'incognito — won\'t help')]);
+    return f;
+  }
+  function renderHeroFacts(){
+    var el = document.getElementById('hero-facts'); if (!el) return;
+    var f = heroFacts(), key = JSON.stringify(f);
+    if (key === heroFactsKey) return;
+    // první vykreslení se postupně "vyjede", pozdější doplnění už ne
+    if (heroFactsKey) el.classList.add('static');
+    heroFactsKey = key;
+    el.innerHTML = f.map(function(x, i){
+      return '<span class="fact" style="animation-delay:' + (i * 140) + 'ms"><span class="fi">' + x[0] + '</span>' + esc(x[1]) + '</span>';
+    }).join('');
   }
   function typeHero(){
     heroTyping = true;
@@ -934,6 +1202,11 @@ const fpRows = [
     set('ram', n.deviceMemory ? ('≥ ' + n.deviceMemory + ' GB') : tr('skryto', 'hidden'), n.deviceMemory ? 'hot' : '');
     set('touch', (n.maxTouchPoints || 0) + (n.maxTouchPoints > 0 ? tr('  · dotykové', '  · touch') : tr('  · myš', '  · mouse')));
     set('screen', s.width + ' × ' + s.height, 'hot');
+    var bat = S.battery;
+    set('battery', batteryText(), (bat && bat.level != null && !bat.plugged) ? 'danger' : '');
+    // screen.isExtended: Chromium, bez svolení (detaily monitorů by svolení chtěly)
+    if (typeof s.isExtended === 'boolean') set('monitors', s.isExtended ? tr('víc než jeden', 'more than one') : tr('jeden', 'one'), s.isExtended ? 'hot' : '');
+    else set('monitors', tr('skryto (jen Chrome/Edge)', 'hidden (Chrome/Edge only)'));
     set('viewport', window.innerWidth + ' × ' + window.innerHeight);
     set('dpr', (window.devicePixelRatio || 1) + '×');
     set('depth', s.colorDepth + '-bit');
@@ -1002,6 +1275,19 @@ const fpRows = [
   function renderBrowser(){
     var n = navigator;
     set('browser', guessBrowser());
+    var inc = S.incognito;
+    if (inc === undefined) set('incognito', tr('zjišťuji…', 'checking…'));
+    else if (inc === true) set('incognito', tr('vypadá to, že ANO — a stejně tě poznávám', 'looks like YES — and I still recognise you'), 'danger');
+    else if (inc === false) set('incognito', tr('nejspíš běžné okno', 'probably a regular window'));
+    else if (inc === 'chromium') set('incognito', tr('nepoznám — Chrome to dnes schovává (a dobře dělá)', 'can\'t tell — Chrome now hides it (good for you)'));
+    else set('incognito', tr('nepoznám', 'can\'t tell'));
+    var prefs = [];
+    prefs.push(mm('(prefers-color-scheme: dark)') ? tr('tmavý režim', 'dark mode') : tr('světlý režim', 'light mode'));
+    if (mm('(prefers-reduced-motion: reduce)')) prefs.push(tr('omezené animace', 'reduced motion'));
+    if (mm('(prefers-contrast: more)')) prefs.push(tr('vyšší kontrast', 'more contrast'));
+    if (mm('(forced-colors: active)')) prefs.push(tr('vynucené barvy', 'forced colours'));
+    if (mm('(prefers-reduced-transparency: reduce)')) prefs.push(tr('méně průhlednosti', 'less transparency'));
+    set('prefs', prefs.join('  ·  '), 'hot');
     set('engine', guessEngine());
     set('langs', (n.languages && n.languages.join(', ')) || n.language || null, 'hot');
     var tz = (Intl.DateTimeFormat().resolvedOptions().timeZone) || null;
@@ -1129,10 +1415,13 @@ const fpRows = [
   }
 
   // ETag "supercookie" — bezstavový tracking přes cache (functions/api/etag.js).
+  var scStarted = false;
   function collectSupercookie(){
+    // Jen jednou za načtení: druhý dotaz by revalidoval čerstvě uložený ETag.
+    if (scStarted) return; scStarted = true;
     // default cache mode → prohlížeč při revalidaci sám pošle If-None-Match
     fetch('/api/etag').then(function(r){ return r.ok ? r.json() : Promise.reject(); })
-      .then(function(d){ S.sc = d; renderSupercookie(); if (S.dossierReady) renderDossier(); })
+      .then(function(d){ S.sc = d; renderSupercookie(); onLate(); })
       .catch(function(){ S.sc = { error: true }; renderSupercookie(); if (S.dossierReady) renderDossier(); });
   }
   function renderSupercookie(){
@@ -1146,11 +1435,15 @@ const fpRows = [
     }
     idEl.textContent = d.id;
     idEl.classList.toggle('danger', !!d.returning);
-    note.innerHTML = d.returning
+    var n = d.visits | 0, last = d.lastVisit ? relTime(d.lastVisit) : null;
+    note.innerHTML = (d.returning && n > 1)
+      ? tr('Vítej zpět. Tohle je tvoje <b>' + n + '. návštěva</b>' + (last ? ', minule jsi tu byl ' + esc(last) : '') + '. Pamatuje si to tvoje <b>cache</b> — i když sis mezitím smazal cookies.',
+           'Welcome back. This is your <b>visit #' + n + '</b>' + (last ? ', last time was ' + esc(last) : '') + '. Your <b>cache</b> remembers — even if you cleared cookies since.')
+      : d.returning
       ? tr('Poznávám tě — tohle ID ti sedí v <b>cache</b>. Vrátil ses, i kdybys mezitím smazal cookies.',
            'I recognize you — this ID lives in your <b>cache</b>. You came back, even if you cleared cookies.')
-      : tr('Právě jsem ti ho přiřadil a uložil do cache. <b>Smaž si teď cookies a načti znovu</b> — pozdravím tě stejným ID.',
-           'I just assigned it and cached it. <b>Clear your cookies now and reload</b> — I\'ll greet you with the same ID.');
+      : tr('Právě jsem ti ho přiřadil a uložil do cache. <b>Smaž si cookies a přijď jindy</b> — pozdravím tě stejným ID a spočítám tvoje návštěvy.',
+           'I just assigned it and cached it. <b>Clear your cookies now and come back later</b> — I\'ll greet you with the same ID and count your visits.');
   }
 
   function collectFingerprint(){
@@ -1261,10 +1554,11 @@ const fpRows = [
     }, 150);
   }
 
-  var FLAG = { CZ:'🇨🇿', SK:'🇸🇰', PL:'🇵🇱', DE:'🇩🇪', AT:'🇦🇹', US:'🇺🇸', GB:'🇬🇧' };
+  var FLAG = { CZ:'🇨🇿', SK:'🇸🇰', PL:'🇵🇱', DE:'🇩🇪', AT:'🇦🇹', US:'🇺🇸', GB:'🇬🇧', FR:'🇫🇷', ES:'🇪🇸', IT:'🇮🇹', PT:'🇵🇹' };
   var CNAME = { CZ:{cs:'Česko',en:'Czechia'}, SK:{cs:'Slovensko',en:'Slovakia'},
     PL:{cs:'Polsko',en:'Poland'}, DE:{cs:'Německo',en:'Germany'}, AT:{cs:'Rakousko',en:'Austria'},
-    US:{cs:'USA',en:'USA'}, GB:{cs:'Velká Británie',en:'United Kingdom'} };
+    US:{cs:'USA',en:'USA'}, GB:{cs:'Velká Británie',en:'United Kingdom'},
+    FR:{cs:'Francie',en:'France'}, ES:{cs:'Španělsko',en:'Spain'}, IT:{cs:'Itálie',en:'Italy'}, PT:{cs:'Portugalsko',en:'Portugal'} };
   function flag(cc){ return cc ? (FLAG[cc] || '🏳️') + ' ' + cc : ''; }
 
   function tzCountry(tz){
@@ -1305,6 +1599,13 @@ const fpRows = [
     var lang = (navigator.languages && navigator.languages[0]) || navigator.language || null;
     var langCC = langCountry(lang);
     set('o-lang', lang ? (lang + (langCC ? '  → ' + flag(langCC) : '')) : '—', langCC ? 'hot':''); vote(langCC);
+
+    // 3b) klávesnice (nezávislá na jazyku prohlížeče → silný hlas, váha 2)
+    var k = S.kbd;
+    if (!k) set('o-kbd', tr('zjišťuji…', 'checking…'));
+    else if (k.unsupported) set('o-kbd', tr('skryto (jen Chrome/Edge)', 'hidden (Chrome/Edge only)'));
+    else if (k.cc){ set('o-kbd', k.layout + '  → ' + flag(k.cc), 'danger'); vote(k.cc, 2); }
+    else set('o-kbd', k.layout + tr('  (bez národních znaků)', '  (no national keys)'));
 
     // 4) locale / formát čísel — odvozeno z jazyka (jen zobrazení, NEHLASUJE,
     //    aby se stejný signál nepočítal dvakrát).
@@ -1381,47 +1682,76 @@ const fpRows = [
       }, function(){ pr.textContent = tr('odmítnuto','denied'); }, { enableHighAccuracy: true, timeout: 10000 });
     });
 
+    // Kamera: 3 s živého náhledu ("tohle vidím já"), pak zmrazený snímek.
+    // Snímek zůstane jen na tvém plátně — nikam se neodesílá.
     var cam = document.getElementById('perm-cam');
     cam && cam.addEventListener('click', function(){
       var pr = document.getElementById('pr-cam');
       pr.textContent = tr('ptám se…', 'asking…');
-      if (!navigator.mediaDevices){ pr.textContent = tr('nedostupné','unavailable'); return; }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ pr.textContent = tr('nedostupné','unavailable'); return; }
+      cam.disabled = true;
       navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream){
+        var box = document.getElementById('cam-box'), video = document.getElementById('cam-video'),
+            still = document.getElementById('cam-still'), count = document.getElementById('cam-count'),
+            cap = document.getElementById('cam-cap'), tick = 0;
         var track = stream.getVideoTracks()[0];
-        var st = track.getSettings ? track.getSettings() : {};
+        var st = (track && track.getSettings) ? track.getSettings() : {};
         pr.classList.add('danger');
-        pr.textContent = (track.label || tr('kamera','camera')) + (st.width ? '  ' + st.width + '×' + st.height : '');
-        stream.getTracks().forEach(function(t){ t.stop(); });
-      }).catch(function(){ pr.textContent = tr('odmítnuto','denied'); });
+        pr.textContent = ((track && track.label) || tr('kamera','camera')) + (st.width ? '  ' + st.width + '×' + st.height : '');
+        var guard = streamGuard(stream, 3000, function(){
+          clearInterval(tick);
+          // zmrazit poslední snímek (pokud už video nějaký má)
+          try {
+            if (video.videoWidth){
+              still.width = video.videoWidth; still.height = video.videoHeight;
+              still.getContext('2d').drawImage(video, 0, 0);
+              still.hidden = false; video.hidden = true;
+              cap.textContent = tr('…a tenhle snímek by si web mohl nechat. (Náš zůstal jen v tvém prohlížeči.)',
+                                   '…and a site could keep this frame. (Ours stayed in your browser.)');
+            } else { box.hidden = true; }
+          } catch(e){ box.hidden = true; }
+          video.srcObject = null; count.textContent = '';
+          cam.disabled = false;
+        });
+        if (guard.done()) return;
+        still.hidden = true; video.hidden = false; box.hidden = false;
+        cap.textContent = tr('Tohle vidím já.', 'This is what I see.');
+        video.srcObject = stream;
+        var p = video.play(); if (p && p.catch) p.catch(function(){});
+        var left = 3; count.textContent = left + ' s';
+        tick = setInterval(function(){ left--; if (left > 0) count.textContent = left + ' s'; }, 1000);
+      }).catch(function(){ cam.disabled = false; pr.textContent = tr('odmítnuto','denied'); });
     });
 
     var mic = document.getElementById('perm-mic');
     mic && mic.addEventListener('click', function(){
       var pr = document.getElementById('pr-mic');
       pr.textContent = tr('ptám se…', 'asking…');
-      if (!navigator.mediaDevices){ pr.textContent = tr('nedostupné','unavailable'); return; }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ pr.textContent = tr('nedostupné','unavailable'); return; }
+      mic.disabled = true;
       navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream){
-        var AC = window.AudioContext || window.webkitAudioContext;
-        var ac = new AC(); var src = ac.createMediaStreamSource(stream);
-        var an = ac.createAnalyser(); an.fftSize = 256; src.connect(an);
-        var buf = new Uint8Array(an.frequencyBinCount);
-        pr.classList.add('danger');
-        // Vypnutí NEZÁVISLÉ na requestAnimationFrame — ten se ve skryté
-        // záložce zastaví a mikrofon by běžel dál. Skrytí/odchod = hned stop.
-        var raf = 0, done = false, to = setTimeout(stop, 8000);
-        function onVis(){ if (document.hidden) stop(); }
-        function stop(){
-          if (done) return; done = true;
-          clearTimeout(to); cancelAnimationFrame(raf);
-          document.removeEventListener('visibilitychange', onVis);
-          window.removeEventListener('pagehide', stop);
-          stream.getTracks().forEach(function(t){ t.stop(); }); ac.close();
+        var ac = null, raf = 0;
+        var guard = streamGuard(stream, 8000, function(){
+          cancelAnimationFrame(raf);
+          if (ac){ try { ac.close(); } catch(e){} }
           pr.textContent += tr('  (stop)','  (stop)');
+          mic.disabled = false;
+        });
+        if (guard.done()) return;
+        var an, buf;
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          ac = new AC(); var src = ac.createMediaStreamSource(stream);
+          an = ac.createAnalyser(); an.fftSize = 256; src.connect(an);
+          buf = new Uint8Array(an.frequencyBinCount);
+        } catch(e){
+          // i když se analýza nepovede, mikrofon MUSÍ zhasnout
+          guard.stop(); pr.textContent = tr('nešlo spustit analýzu zvuku', 'couldn\'t start audio analysis');
+          return;
         }
-        document.addEventListener('visibilitychange', onVis);
-        window.addEventListener('pagehide', stop);
+        pr.classList.add('danger');
         (function tick(){
-          if (done) return;
+          if (guard.done()) return;
           an.getByteFrequencyData(buf);
           var sum = 0; for (var i=0;i<buf.length;i++) sum += buf[i];
           var lvl = Math.round(sum / buf.length);
@@ -1429,33 +1759,72 @@ const fpRows = [
           pr.textContent = tr('hladina ', 'level ') + lvl + '  ' + bars;
           raf = requestAnimationFrame(tick);
         })();
-      }).catch(function(){ pr.textContent = tr('odmítnuto','denied'); });
+      }).catch(function(){ mic.disabled = false; pr.textContent = tr('odmítnuto','denied'); });
     });
+  }
 
-    var bat = document.getElementById('perm-battery');
-    bat && bat.addEventListener('click', function(){
-      var pr = document.getElementById('pr-battery');
-      if (!navigator.getBattery){ pr.textContent = tr('nedostupné (Safari/FF)','unavailable (Safari/FF)'); return; }
-      navigator.getBattery().then(function(b){
-        var lvl = (b && typeof b.level === 'number') ? b.level : NaN;
-        if (isNaN(lvl)){ pr.textContent = tr('nešlo přečíst (nejspíš stolní PC)','couldn\'t read it (likely a desktop)'); return; }
-        pr.classList.add('danger');
-        pr.textContent = Math.round(lvl*100) + '%  ' + (b.charging ? tr('· nabíjí se','· charging') : tr('· z baterie','· on battery'));
-      }).catch(function(){ pr.textContent = tr('nešlo přečíst','couldn\'t read it'); });
-    });
+  // Hlídač živého streamu (kamera/mikrofon): vypne ho po `ms`, při skrytí
+  // záložky i při odchodu ze stránky — nezávisle na requestAnimationFrame,
+  // který se ve skryté záložce zastaví. Když je záložka skrytá už při startu,
+  // vypne hned. onStop běží PŘED zastavením stop, ať jde ještě sejmout snímek.
+  function streamGuard(stream, ms, onStop){
+    var done = false, to = setTimeout(stop, ms);
+    function onVis(){ if (document.hidden) stop(); }
+    function stop(){
+      if (done) return; done = true;
+      clearTimeout(to);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', stop);
+      try { if (onStop) onStop(); } catch(e){}
+      stream.getTracks().forEach(function(t){ t.stop(); });
+    }
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', stop);
+    if (document.hidden) stop();
+    return { stop: stop, done: function(){ return done; } };
   }
 
   // ===================== 06 · CHOVÁNÍ (živě) =====================
   // Posluchače navěsíme hned při načtení, ať se počítá od začátku.
-  var beh = { mouse:0, dist:0, clicks:0, keys:0, scroll:0, away:0, start:0, lastX:null, lastY:null };
+  var beh = { mouse:0, dist:0, clicks:0, keys:0, scroll:0, away:0, start:0, lastX:null, lastY:null,
+              pts:[], taps:[], lastPt:0 };
+  // body pro heatmapu: poloha v okně jako zlomek (0–1), ať nezáleží na velikosti
+  var HEAT_MAX = 3000;
+  function heatPoint(x, y){
+    var now = Date.now(); if (now - beh.lastPt < 30) return; beh.lastPt = now;
+    if (beh.pts.length >= HEAT_MAX) beh.pts.shift();
+    beh.pts.push([x / Math.max(1, window.innerWidth), y / Math.max(1, window.innerHeight)]);
+  }
+  function heatTap(x, y){
+    if (beh.taps.length >= 200) beh.taps.shift();
+    beh.taps.push([x / Math.max(1, window.innerWidth), y / Math.max(1, window.innerHeight)]);
+  }
+  function toast(html){
+    var t = document.getElementById('toast');
+    if (!t){ t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+    t.innerHTML = html; t.classList.add('show');
+    clearTimeout(t.__h); t.__h = setTimeout(function(){ t.classList.remove('show'); }, 4500);
+  }
   function initBehavior(){
     S.behavior = beh; beh.start = Date.now();
     window.addEventListener('mousemove', function(e){
       beh.mouse++;
       if (beh.lastX != null){ var dx = e.clientX-beh.lastX, dy = e.clientY-beh.lastY; beh.dist += Math.sqrt(dx*dx+dy*dy); }
       beh.lastX = e.clientX; beh.lastY = e.clientY;
+      heatPoint(e.clientX, e.clientY);
     }, { passive:true });
-    window.addEventListener('click', function(){ beh.clicks++; }, { passive:true });
+    window.addEventListener('touchmove', function(e){ var t = e.touches && e.touches[0]; if (t) heatPoint(t.clientX, t.clientY); }, { passive:true });
+    window.addEventListener('click', function(e){ beh.clicks++; heatTap(e.clientX, e.clientY); }, { passive:true });
+    // Co sis zkopíroval — web to vidí (jen text z téhle stránky, nic neodchází).
+    document.addEventListener('copy', function(){
+      var txt = ''; try { txt = String(window.getSelection() || '').trim(); } catch(e){}
+      if (!txt) return;
+      S.copied = txt.length > 80 ? txt.slice(0, 80) + '…' : txt;
+      toast(tr('📋 Vidím, co sis zkopíroval: <b>„' + esc(S.copied) + '“</b> — tohle umí každý web.',
+               '📋 I saw what you copied: <b>"' + esc(S.copied) + '"</b> — any site can do this.'));
+      renderBehavior();
+      if (S.dossierReady) renderDossier();
+    });
     window.addEventListener('keydown', function(){ beh.keys++; }, { passive:true });
     window.addEventListener('scroll', function(){
       var h = document.documentElement.scrollHeight - window.innerHeight;
@@ -1472,6 +1841,45 @@ const fpRows = [
     set('b-keys', String(b.keys), b.keys ? 'hot' : '');
     set('b-scroll', b.scroll + tr(' % stránky', ' % of the page'));
     set('b-away', b.away + (b.away ? tr('  · vím o tom', '  · I noticed') : ''), b.away ? 'danger' : '');
+    set('b-copy', S.copied ? '„' + S.copied + '“' : tr('zatím nic — zkus něco označit a zkopírovat', 'nothing yet — try selecting and copying something'), S.copied ? 'danger' : '');
+    drawHeat();
+  }
+  function drawHeat(){
+    var c = document.getElementById('heat'); if (!c || !behLoop) return;
+    var ctx = c.getContext('2d'); if (!ctx) return;
+    // plátno má poměr stran tvého okna (v rozumných mezích)
+    var W = 760, H = Math.round(W * Math.min(1.2, Math.max(0.35, window.innerHeight / Math.max(1, window.innerWidth))));
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (c.width !== W * dpr || c.height !== H * dpr){ c.width = W * dpr; c.height = H * dpr; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#05070a'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
+    for (var gx = 0; gx <= W; gx += 38){ ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+    for (var gy = 0; gy <= H; gy += 38){ ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+    var pts = beh.pts;
+    if (!pts.length){
+      ctx.fillStyle = 'rgba(139,149,163,0.8)'; ctx.font = '13px ui-monospace, monospace'; ctx.textAlign = 'center';
+      ctx.fillText(tr('pohni myší / prstem…', 'move your mouse / finger…'), W / 2, H / 2);
+      return;
+    }
+    // stopa
+    ctx.strokeStyle = 'rgba(56,232,200,0.35)'; ctx.lineWidth = 1.2; ctx.beginPath();
+    for (var i = 0; i < pts.length; i++){ var x = pts[i][0] * W, y = pts[i][1] * H; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+    ctx.stroke();
+    // teplo: kde se kurzor zdržel, se body sčítají
+    ctx.globalCompositeOperation = 'lighter';
+    for (var j = 0; j < pts.length; j++){
+      var px = pts[j][0] * W, py = pts[j][1] * H;
+      var g = ctx.createRadialGradient(px, py, 0, px, py, 16);
+      g.addColorStop(0, 'rgba(255,92,108,0.10)'); g.addColorStop(1, 'rgba(255,92,108,0)');
+      ctx.fillStyle = g; ctx.fillRect(px - 16, py - 16, 32, 32);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    beh.taps.forEach(function(t){
+      ctx.beginPath(); ctx.arc(t[0] * W, t[1] * H, 6, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,184,77,0.95)'; ctx.lineWidth = 2; ctx.stroke();
+    });
   }
   var behLoop = false;
   function collectBehavior(){
@@ -1489,7 +1897,64 @@ const fpRows = [
     if (getGPU()) b += 5;
     if (navigator.hardwareConcurrency) b += 2;
     if (navigator.deviceMemory) b += 2;
+    if (S.kbd && S.kbd.layout) b += S.kbd.cc ? 3 : 1;
+    if (typeof screen.isExtended === 'boolean') b += 1;
     return Math.round(b);
+  }
+  var KBD_ADJ = { CZ:['české','Czech'], SK:['slovenské','Slovak'], DE:['německé','German'], FR:['francouzské','French'],
+    ES:['španělské','Spanish'], IT:['italské','Italian'], PT:['portugalské','Portuguese'] };
+  // Souvislé "hlášení" o subjektu — z dat ze všech panelů. Hodnoty se escapují,
+  // zvýrazněné části jsou v <b>.
+  function storyHTML(){
+    var B = function(x){ return '<b>' + esc(x) + '</b>'; }, out = [];
+    var gd = guessDevice(), d = (S.whoami && S.whoami !== false) ? S.whoami : null, v = vpnInfo();
+    // zařízení
+    if (gd) out.push(tr('Subjekt používá ' + B(gd.name) + ' (cena zhruba ' + esc(gd.price.replace(/^~/, '')) + ').',
+                        'The subject uses ' + B(gd.name) + ' (worth roughly ' + esc(gd.price.replace(/^~/, '')) + ').'));
+    else out.push(tr('Subjekt používá ' + B(guessOS()) + '.', 'The subject runs ' + B(guessOS()) + '.'));
+    // poloha + připojení
+    var place = null;
+    if (S.precise && S.precise.address) place = S.precise.address;
+    else if (d && d.geo){ var cn = d.geo.countryName ? d.geo.countryName[T()] : d.geo.country; place = [d.geo.city, cn].filter(Boolean).join(', '); }
+    if (place){
+      var isp = d && d.network && d.network.asOrganization;
+      var s1 = tr('Připojuje se z místa ' + B(place), 'They connect from ' + B(place));
+      if (v && v.hosting) s1 += tr(' přes VPN ' + esc(v.org), ' through the VPN ' + esc(v.org)) + (v.mismatch ? tr(' — hodiny prohlížeče ho ale prozrazují', ' — but their browser clock gives them away') : '');
+      else if (isp) s1 += tr(' přes ' + esc(isp), ' via ' + esc(isp));
+      out.push(s1 + (S.precise && S.precise.address ? tr(' (přesně podle GPS).', ' (exact, from GPS).') : '.'));
+    }
+    // jazyk + klávesnice
+    var lang = (navigator.languages && navigator.languages[0]) || navigator.language;
+    if (lang){
+      var s2 = tr('Jazyk prohlížeče je ' + B(langName(lang.split('-')[0])), 'Their browser speaks ' + B(langName(lang.split('-')[0])));
+      var k = S.kbd, ka = k && k.cc && KBD_ADJ[k.cc];
+      if (ka) s2 += tr(', píše ale na ' + B(ka[0]) + ' klávesnici', ', but they type on a ' + B(ka[1]) + ' keyboard');
+      out.push(s2 + '.');
+    }
+    // čas, baterie, nastavení
+    var hh = new Date().toLocaleTimeString(T() === 'en' ? 'en-GB' : 'cs-CZ', { hour: '2-digit', minute: '2-digit' });
+    var s3 = tr('Je u zařízení v ' + B(hh) + ' místního času', 'They are at the device at ' + B(hh) + ' local time');
+    var bt = S.battery;
+    if (bt && bt.level != null && !bt.plugged) s3 += tr(', baterii má na ' + B(bt.level + ' %') + (bt.charging ? ' a nabíjí' : ''), ', battery at ' + B(bt.level + '%') + (bt.charging ? ' and charging' : ''));
+    if (mm('(prefers-color-scheme: dark)')) s3 += tr(', má zapnutý tmavý režim', ', with dark mode on');
+    out.push(s3 + '.');
+    // chování na stránce
+    var b = S.behavior;
+    if (b){
+      var sec = Math.round((Date.now() - b.start) / 1000), t = sec < 60 ? sec + ' s' : Math.floor(sec / 60) + ' min ' + (sec % 60) + ' s';
+      var s4 = tr('Na stránce je ' + B(t), 'They have been here for ' + B(t));
+      if (b.away) s4 += tr(', ' + B(b.away + '×') + ' se podíval jinam', ', looked away ' + B(b.away + '×'));
+      if (S.copied) s4 += tr(' a zkopíroval si „' + esc(S.copied) + '“', ' and copied "' + esc(S.copied) + '"');
+      out.push(s4 + '.');
+    }
+    // návštěvy + anonymní okno
+    if (S.sc && !S.sc.error){
+      if (S.sc.visits > 1) out.push(tr('Byl tu už ' + B(S.sc.visits + '×') + (S.sc.lastVisit ? ', naposledy ' + esc(relTime(S.sc.lastVisit)) : '') + '.',
+                                       'This is visit ' + B('#' + S.sc.visits) + (S.sc.lastVisit ? ', the last one ' + esc(relTime(S.sc.lastVisit)) : '') + '.'));
+      else out.push(tr('Je tu poprvé. Příště ho poznáme.', 'First visit. We\'ll recognise them next time.'));
+    }
+    if (S.incognito === true) out.push(tr('Myslí si, že ho chrání anonymní okno.', 'They think incognito protects them.'));
+    return out.join(' ');
   }
   function collectDossier(){
     S.dossierReady = true;
@@ -1499,8 +1964,31 @@ const fpRows = [
     if (!S.originReady) collectOrigin();
     collectMediaDevices();
     renderDossier();
+    // hlášení obsahuje čas na stránce → drž ho živé
+    if (!storyLoop) storyLoop = setInterval(function(){
+      var st = document.getElementById('ds-story'); if (st) st.innerHTML = storyHTML();
+    }, 1000);
+  }
+  var storyLoop = 0;
+
+  // Sdílení — Web Share API, jinak zkopírovat odkaz. Nesdílí žádná data o tobě.
+  function bindShare(){
+    var btn = document.getElementById('share-btn'), note = document.getElementById('share-note');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      var url = 'https://www.igy.cz/?lang=' + T();
+      var text = tr('Myslíš, že jsi na webu anonymní? Mrkni, co o tobě prohlížeč prozradí.',
+                    'Think you\'re anonymous online? See what your browser gives away.');
+      function copied(){ if (note) note.textContent = tr('Odkaz zkopírován — pošli ho dál.', 'Link copied — pass it on.'); }
+      if (navigator.share){
+        navigator.share({ title: 'I Google You', text: text, url: url }).catch(function(){});
+      } else if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(url).then(copied, function(){ if (note) note.textContent = url; });
+      } else if (note){ note.textContent = url; }
+    });
   }
   function renderDossier(){
+    var st = document.getElementById('ds-story'); if (st) st.innerHTML = storyHTML();
     setText('ds-code', (S.fp && S.fp.id) ? ('#' + S.fp.id) : '#········');
     var loc = '—';
     if (S.precise && (S.precise.address || S.precise.lat != null)){
@@ -1580,6 +2068,12 @@ const fpRows = [
 
   function start(){
     initBehavior();
+    // pro hero a spis potřebujeme tyhle hned, ne až po doscrollování
+    collectBattery();
+    collectKeyboard();
+    collectIncognito();
+    collectSupercookie();
+    bindShare();
     setupReveal({ device: collectDevice, browser: collectBrowser, fp: collectFingerprint,
       origin: collectOrigin, behavior: collectBehavior, perms: bindPerms, dossier: collectDossier });
     window.onLangChange = rerenderAll; // Layout volá při přepnutí vlajky

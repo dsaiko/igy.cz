@@ -8,14 +8,19 @@ In the spirit of [BrowserLeaks](https://browserleaks.com), [AmIUnique](https://a
 
 ## What it reveals
 
-- **Network** — IP (v4/v6), city, region, country, **ISP / ASN**, Cloudflare edge, HTTP protocol, **TLS version & cipher**, plus a **WebRTC leak** (local IP where not protected by mDNS, and the public IP via STUN) and a **map** pinned to your approximate location.
-- **Device** — OS, platform, CPU cores, memory, touch points, screen, DPR, colour depth, **GPU** (via WebGL), a cheeky **device + price guess**, and **the number of cameras & microphones attached — without asking for permission**.
-- **Browser** — engine, languages, time zone, locale/number format, Do Not Track, cookies, full User‑Agent.
-- **Fingerprint** — canvas, WebGL and audio hashes plus detected fonts, combined into a **near‑unique ID** that stays the same in incognito. Includes an **ETag "supercookie"** that survives clearing cookies, and **software inference from fonts**.
-- **Where you really are** — triangulates your country by cross‑checking IP, time zone, language and ad‑blocker signals.
-- **Behaviour** — live counters: mouse movement, clicks, keystrokes, scroll depth, and **how many times you switched away** from the tab.
-- **Consent‑gated extras** — one click each: precise GPS (with a real map), camera, microphone level, battery.
-- **Dossier** — a surveillance‑style summary with an entropy‑based **trackability verdict**.
+- **First screen** — before you scroll: your city, ISP (or VPN), device, local time, battery and visit count, typed out as chips.
+- **Network** — IP, city, region, country, **ISP / ASN**, a **VPN check** (VPN/datacenter ASN, and whether your browser clock disagrees with your IP's time zone), a **WebRTC leak** and a **map** pinned to your approximate location. TLS, protocol, Cloudflare edge and connection type are under *technical details*.
+- **Device** — best‑guess device **and its price**, OS, **battery** (no prompt in Chromium), CPU, memory, GPU (via WebGL), screen, **number of monitors**, and **how many cameras & microphones are attached — without asking**.
+- **Browser** — browser, **incognito check** (honest: Chrome no longer lets sites tell), languages, time zone, local time, **your settings** (dark mode, reduced motion, contrast…), Do Not Track.
+- **Fingerprint** — canvas, WebGL and audio hashes plus detected fonts → a **near‑unique ID** that stays the same in incognito, **software inference from fonts**, and an **ETag "supercookie"** that survives a cookie wipe and **counts your visits** ("visit #5, last time 3 days ago") — with no database: the counter lives in your own cache.
+- **Where you really are** — triangulates your country from IP, time zone, language, **keyboard layout** and ad‑blocker signals.
+- **Behaviour** — live counters (mouse, clicks, keys, scroll depth, tab switches), **what you copied**, and a **heatmap of your cursor** — the view session‑replay tools get.
+- **Consent‑gated extras** — one click each: precise GPS (full street address via OpenStreetMap), **camera (3 s live view, then a frozen frame that never leaves your browser)**, microphone level. Streams stop on a timer, when you switch tabs and when you leave.
+- **Plugins died. Tracking didn't.** — what Flash/ActiveX/Java/Silverlight did, and what replaced each of them.
+- **Dossier** — a surveillance‑style **written report** about you, plus an entropy‑based **trackability verdict**.
+- **What can you do?** — honest, short defences (VPN limits, Firefox/Brave/Safari, uBlock Origin, Tor) and a share button.
+
+Each panel ends with one line of *so what* — what the data actually lets a site do.
 
 Everything is computed **in your browser**. The server (two tiny Cloudflare Pages Functions) only reads what the browser sends it — no database, no cookies, nothing stored.
 
