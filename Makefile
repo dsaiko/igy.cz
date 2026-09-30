@@ -1,4 +1,4 @@
-.PHONY: help setup build dev preview clean deploy login whoami
+.PHONY: help setup build dev preview clean deploy login whoami test test-e2e
 
 # Lokální overrides (CF_ACCOUNT_ID) — mimo git, viz Makefile.local.example.
 -include Makefile.local
@@ -17,6 +17,8 @@ help:
 	@echo "  make dev       — astro dev (bez CF funkcí; /api/* vrací fallback)"
 	@echo "  make preview   — build + wrangler pages dev (S CF funkcemi na http://localhost:$(PREVIEW_PORT))"
 	@echo "  make clean     — smaže dist/"
+	@echo "  make test      — jednotkové testy (ETag počítadlo návštěv)"
+	@echo "  make test-e2e  — build + kontrola stránky v Chrome (CHROME_PATH=…, E2E_OFFLINE=1)"
 	@echo ""
 	@echo "  make login     — wrangler login (jednorázově, přes prohlížeč)"
 	@echo "  make whoami    — ověří přihlášení k Cloudflare"
@@ -43,6 +45,12 @@ preview: build
 
 clean:
 	rm -rf dist
+
+test: node_modules
+	npm test
+
+test-e2e: build
+	npm run test:e2e
 
 login:
 	$(WRANGLER) login

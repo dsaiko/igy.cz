@@ -367,6 +367,7 @@ const fpRows = [
   .cam-box { position: relative; margin-top: 16px; border-radius: 14px; overflow: hidden;
     border: 1px solid rgba(255,92,108,0.4); background: #000; max-width: 480px; }
   .cam-box video, .cam-box canvas { display: block; width: 100%; height: auto; transform: scaleX(-1); }
+  .cam-box [hidden] { display: none; }   /* jinak display:block přebije atribut hidden */
   .cam-tag { position: absolute; top: 10px; left: 12px; font-family: var(--mono); font-size: 12px;
     color: #fff; text-shadow: 0 0 6px #000; }
   .cam-cap { padding: 10px 14px; font-family: var(--mono); font-size: 12.5px; color: var(--danger);
@@ -787,8 +788,8 @@ const fpRows = [
   // "před 3 dny" / "3 days ago" (čeština: 7. pád — minutou/minutami, dnem/dny…)
   function relTime(ms){
     var s = Math.max(0, Math.round((Date.now() - ms) / 1000));
-    var u = s < 3600 ? [Math.max(1, Math.round(s/60)), ['minutou','minutami'], ['minute','minutes']]
-          : s < 86400 ? [Math.round(s/3600), ['hodinou','hodinami'], ['hour','hours']]
+    var u = s < 3570 ? [Math.max(1, Math.round(s/60)), ['minutou','minutami'], ['minute','minutes']]
+          : s < 84600 ? [Math.round(s/3600), ['hodinou','hodinami'], ['hour','hours']]
           : [Math.round(s/86400), ['dnem','dny'], ['day','days']];
     var n = u[0];
     return tr('před ' + (n === 1 ? u[1][0] : n + ' ' + u[1][1]), n + ' ' + (n === 1 ? u[2][0] : u[2][1]) + ' ago');
@@ -913,7 +914,9 @@ const fpRows = [
   }
 
   // --- VPN / proxy: IP patří VPN/datacentru? A jdou hodiny prohlížeče jinak než IP? ---
-  var VPN_RE = /(nord|proton|mullvad|express ?vpn|surfshark|cyberghost|private internet access|windscribe|ipvanish|hide\.me|purevpn|m247|datacamp|cdn77|leaseweb|ovh|hetzner|digitalocean|amazon|google cloud|microsoft|azure|linode|akamai|vultr|choopa|contabo|scaleway|oracle|alibaba|tencent|zscaler|cloudflare|fastly|clouvider|packethub)/i;
+  // Jen konkrétní značky VPN a hostingů — ne holé "nord" (Nordic Telecom je
+  // běžný český operátor). Krátké tokeny s hranicí slova.
+  var VPN_RE = /(nordvpn|nord security|tefincom|proton ?(ag|vpn)|mullvad|express ?vpn|surfshark|cyberghost|private internet access|windscribe|ipvanish|hide\.me|purevpn|\bm247\b|datacamp|cdn77|leaseweb|\bovh|hetzner|digitalocean|amazon|google cloud|microsoft|azure|linode|akamai|vultr|choopa|contabo|scaleway|oracle|alibaba|tencent|zscaler|cloudflare|fastly|clouvider|packethub)/i;
   function tzOffsetName(tz){
     try {
       var parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' }).formatToParts(new Date());
@@ -1694,6 +1697,8 @@ const fpRows = [
         var box = document.getElementById('cam-box'), video = document.getElementById('cam-video'),
             still = document.getElementById('cam-still'), count = document.getElementById('cam-count'),
             cap = document.getElementById('cam-cap'), tick = 0;
+        // oba jazyky zůstávají v DOM → přepínač jazyka funguje i po demu
+        function setCap(cs, en){ cap.querySelector('.cs').textContent = cs; cap.querySelector('.en').textContent = en; }
         var track = stream.getVideoTracks()[0];
         var st = (track && track.getSettings) ? track.getSettings() : {};
         pr.classList.add('danger');
@@ -1706,8 +1711,8 @@ const fpRows = [
               still.width = video.videoWidth; still.height = video.videoHeight;
               still.getContext('2d').drawImage(video, 0, 0);
               still.hidden = false; video.hidden = true;
-              cap.textContent = tr('…a tenhle snímek by si web mohl nechat. (Náš zůstal jen v tvém prohlížeči.)',
-                                   '…and a site could keep this frame. (Ours stayed in your browser.)');
+              setCap('…a tenhle snímek by si web mohl nechat. (Náš zůstal jen v tvém prohlížeči.)',
+                     '…and a site could keep this frame. (Ours stayed in your browser.)');
             } else { box.hidden = true; }
           } catch(e){ box.hidden = true; }
           video.srcObject = null; count.textContent = '';
@@ -1715,7 +1720,7 @@ const fpRows = [
         });
         if (guard.done()) return;
         still.hidden = true; video.hidden = false; box.hidden = false;
-        cap.textContent = tr('Tohle vidím já.', 'This is what I see.');
+        setCap('Tohle vidím já.', 'This is what I see.');
         video.srcObject = stream;
         var p = video.play(); if (p && p.catch) p.catch(function(){});
         var left = 3; count.textContent = left + ' s';
@@ -1965,9 +1970,7 @@ const fpRows = [
     collectMediaDevices();
     renderDossier();
     // hlášení obsahuje čas na stránce → drž ho živé
-    if (!storyLoop) storyLoop = setInterval(function(){
-      var st = document.getElementById('ds-story'); if (st) st.innerHTML = storyHTML();
-    }, 1000);
+    if (!storyLoop) storyLoop = setInterval(renderStory, 1000);
   }
   var storyLoop = 0;
 
@@ -1987,8 +1990,19 @@ const fpRows = [
       } else if (note){ note.textContent = url; }
     });
   }
+  // innerHTML každou sekundu by zrušil rozdělaný výběr textu (a s ním Ctrl+C).
+  var storyLast = '';
+  function renderStory(){
+    var st = document.getElementById('ds-story'); if (!st) return;
+    var html = storyHTML(); if (html === storyLast) return;
+    try {
+      var sel = window.getSelection();
+      if (sel && !sel.isCollapsed && sel.containsNode(st, true)) return;
+    } catch(e){}
+    storyLast = html; st.innerHTML = html;
+  }
   function renderDossier(){
-    var st = document.getElementById('ds-story'); if (st) st.innerHTML = storyHTML();
+    renderStory();
     setText('ds-code', (S.fp && S.fp.id) ? ('#' + S.fp.id) : '#········');
     var loc = '—';
     if (S.precise && (S.precise.address || S.precise.lat != null)){

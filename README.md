@@ -39,7 +39,11 @@ make setup      # npm install
 make dev        # astro dev (no CF functions; /api/* falls back)
 make preview    # build + wrangler pages dev — runs WITH the functions
 make build      # production build → dist/
+make test       # unit tests (ETag visit counter), no dependencies
+make test-e2e   # build + ~60 checks in real Chrome (puppeteer-core)
 ```
+
+The e2e check needs a local Chrome/Chromium: set `CHROME_PATH` if it isn't in `/Applications`. `E2E_OFFLINE=1` skips the one check that goes to the network (GoatCounter + SRI).
 
 Copy `Makefile.local.example` → `Makefile.local` and set your `CF_ACCOUNT_ID`.
 
