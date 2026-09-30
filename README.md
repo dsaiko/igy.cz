@@ -49,7 +49,13 @@ Live at **https://www.igy.cz** (apex `igy.cz` 301‑redirects to `www`). Also re
 
 ## Privacy
 
-igy.cz stores nothing about you. All detection runs client‑side; the server is stateless. The only outbound requests are: your own visit to Cloudflare (unavoidable), a public STUN server for the WebRTC demo, and OpenStreetMap tiles for the location maps.
+igy.cz stores nothing about you. All detection runs client‑side; the server is stateless. The only outbound requests are:
+
+- your own visit to Cloudflare (unavoidable),
+- a public STUN server for the WebRTC demo,
+- OpenStreetMap tiles for the location maps,
+- **only if you grant precise location:** your GPS coordinates to [OpenStreetMap Nominatim](https://nominatim.org) to look up the street address,
+- a cookieless page‑view count to [GoatCounter](https://www.goatcounter.com) (honours Do Not Track; the script is pinned with Subresource Integrity).
 
 ## License
 

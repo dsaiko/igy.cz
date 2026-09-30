@@ -5,6 +5,9 @@ import { defineConfig } from 'astro/config';
 // Serverová data (IP, geolokace, ASN) dodává Cloudflare Pages Function
 // v ./functions/api/whoami.js — ta se nasadí spolu se statickým /dist.
 export default defineConfig({
+  // Astro 7 má default 'jsx' (zahazuje zalomení řádku před inline tagem →
+  // "složit<b>skoro" slepené). true = původní HTML-aware komprese.
+  compressHTML: true,
   build: {
     format: 'file',
     inlineStylesheets: 'always',
